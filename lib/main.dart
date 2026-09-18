@@ -37,14 +37,14 @@ class MyApp extends StatelessWidget {
           themeMode: mode,
           theme: ThemeData(
             colorScheme: ColorScheme.fromSeed(
-              seedColor: const Color(0xFF2A5298),
+              seedColor: const Color(0xFF7C3AED),
               brightness: Brightness.light,
             ),
             useMaterial3: true,
           ),
           darkTheme: ThemeData(
             colorScheme: ColorScheme.fromSeed(
-              seedColor: const Color(0xFF2A5298),
+              seedColor: const Color(0xFF7C3AED),
               brightness: Brightness.dark,
             ),
             useMaterial3: true,
@@ -134,8 +134,8 @@ class AvatarWidget extends StatelessWidget {
 
   Color _avatarColor(String email) {
     final colors = [
-      const Color(0xFF2A5298),
-      const Color(0xFF2A9D5C),
+      const Color(0xFF7C3AED),
+      const Color(0xFFA855F7),
       const Color(0xFFD9534F),
       const Color(0xFF9C27B0),
       const Color(0xFFFF9800),
@@ -495,7 +495,7 @@ class _CreateGroupPageState extends State<CreateGroupPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(_isChannel ? 'Новый канал' : 'Новая группа'),
-        backgroundColor: const Color(0xFF2A5298),
+        backgroundColor: const Color(0xFF7C3AED),
         foregroundColor: Colors.white,
         actions: [
           TextButton(
@@ -719,7 +719,7 @@ class _LoginPageState extends State<LoginPage> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [Color(0xFF1E3C72), Color(0xFF2A5298)],
+            colors: [Color(0xFF5B21B6), Color(0xFF7C3AED)],
           ),
         ),
         child: Center(
@@ -734,7 +734,7 @@ class _LoginPageState extends State<LoginPage> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     const Text('ARKZIS',
-                      style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Color(0xFF2A5298), letterSpacing: 2)),
+                      style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Color(0xFF7C3AED), letterSpacing: 2)),
                     const SizedBox(height: 8),
                     const Text('Connect without limits',
                       style: TextStyle(fontSize: 14, color: Colors.grey)),
@@ -762,7 +762,7 @@ class _LoginPageState extends State<LoginPage> {
                       child: ElevatedButton(
                         onPressed: _loading ? null : _login,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF2A5298),
+                          backgroundColor: const Color(0xFF7C3AED),
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -779,7 +779,7 @@ class _LoginPageState extends State<LoginPage> {
                       child: ElevatedButton(
                         onPressed: _loading ? null : _register,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF2A9D5C),
+                          backgroundColor: const Color(0xFFA855F7),
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -924,7 +924,7 @@ class _NamePageState extends State<NamePage> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [Color(0xFF1E3C72), Color(0xFF2A5298)],
+            colors: [Color(0xFF5B21B6), Color(0xFF7C3AED)],
           ),
         ),
         child: Center(
@@ -939,7 +939,7 @@ class _NamePageState extends State<NamePage> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     const Text('Ваш профиль',
-                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF2A5298))),
+                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF7C3AED))),
                     const SizedBox(height: 20),
                     GestureDetector(
                       onTap: _uploading ? null : _pickAvatar,
@@ -956,21 +956,21 @@ class _NamePageState extends State<NamePage> {
                                       loadingBuilder: (context, child, progress) {
                                         if (progress == null) return child;
                                         return Container(
-                                          color: const Color(0xFF2A5298),
+                                          color: const Color(0xFF7C3AED),
                                           alignment: Alignment.center,
                                           child: const CircularProgressIndicator(color: Colors.white),
                                         );
                                       },
                                       errorBuilder: (context, error, stackTrace) {
                                         return Container(
-                                          color: const Color(0xFF2A5298),
+                                          color: const Color(0xFF7C3AED),
                                           alignment: Alignment.center,
                                           child: const Icon(Icons.person, size: 60, color: Colors.white),
                                         );
                                       },
                                     )
                                   : Container(
-                                      color: const Color(0xFF2A5298),
+                                      color: const Color(0xFF7C3AED),
                                       alignment: Alignment.center,
                                       child: const Icon(Icons.person, size: 60, color: Colors.white),
                                     ),
@@ -981,7 +981,7 @@ class _NamePageState extends State<NamePage> {
                             child: Container(
                               padding: const EdgeInsets.all(8),
                               decoration: const BoxDecoration(
-                                color: Color(0xFF2A9D5C), shape: BoxShape.circle),
+                                color: Color(0xFFA855F7), shape: BoxShape.circle),
                               child: const Icon(Icons.camera_alt, size: 20, color: Colors.white),
                             ),
                           ),
@@ -1009,7 +1009,7 @@ class _NamePageState extends State<NamePage> {
                       child: ElevatedButton(
                         onPressed: _loading ? null : _save,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF2A5298),
+                          backgroundColor: const Color(0xFF7C3AED),
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -1208,7 +1208,7 @@ class _UsersPageState extends State<UsersPage> {
                 ),
               )
             : const Text('Чаты'),
-        backgroundColor: const Color(0xFF2A5298),
+        backgroundColor: const Color(0xFF7C3AED),
         foregroundColor: Colors.white,
         actions: [
           IconButton(
@@ -1284,7 +1284,7 @@ class _UsersPageState extends State<UsersPage> {
                                           child: Container(
                                             width: 22, height: 22,
                                             decoration: const BoxDecoration(
-                                              color: Color(0xFF2A9D5C), shape: BoxShape.circle),
+                                              color: Color(0xFFA855F7), shape: BoxShape.circle),
                                             child: const Icon(Icons.add, size: 16, color: Colors.white),
                                           ),
                                         ),
@@ -1365,7 +1365,7 @@ class _UsersPageState extends State<UsersPage> {
                                         padding: const EdgeInsets.symmetric(
                                           horizontal: 8, vertical: 3),
                                         decoration: BoxDecoration(
-                                          color: const Color(0xFF2A5298),
+                                          color: const Color(0xFF7C3AED),
                                           borderRadius: BorderRadius.circular(12),
                                         ),
                                         child: Text(
@@ -1435,7 +1435,7 @@ class _UsersPageState extends State<UsersPage> {
                                       padding: const EdgeInsets.symmetric(
                                         horizontal: 8, vertical: 3),
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFF2A5298),
+                                        color: const Color(0xFF7C3AED),
                                         borderRadius: BorderRadius.circular(12),
                                       ),
                                       child: Text(
@@ -2156,7 +2156,7 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
              
                             const Divider(height: 1),
               ListTile(
-                leading: const Icon(Icons.reply, color: Color(0xFF2A5298)),
+                leading: const Icon(Icons.reply, color: Color(0xFF7C3AED)),
                 title: const Text('Ответить'),
                 onTap: () {
                   Navigator.pop(ctx);
@@ -2165,7 +2165,7 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
               ),
                             if ((msg['display_text'] as String?)?.isNotEmpty == true)
                 ListTile(
-                  leading: const Icon(Icons.copy, color: Color(0xFF2A5298)),
+                  leading: const Icon(Icons.copy, color: Color(0xFF7C3AED)),
                   title: const Text('Копировать'),
                   onTap: () {
                     Clipboard.setData(ClipboardData(text: msg['display_text']));
@@ -2179,7 +2179,7 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
                   },
                 ),
               ListTile(
-                leading: const Icon(Icons.forward, color: Color(0xFF2A5298)),
+                leading: const Icon(Icons.forward, color: Color(0xFF7C3AED)),
                 title: const Text('Переслать'),
                 onTap: () {
                   Navigator.pop(ctx);
@@ -2188,7 +2188,7 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
               ),
               if (isMe)
                 ListTile(
-                  leading: const Icon(Icons.edit, color: Color(0xFF2A5298)),
+                  leading: const Icon(Icons.edit, color: Color(0xFF7C3AED)),
                   title: const Text('Редактировать'),
                   onTap: () {
                     Navigator.pop(ctx);
@@ -2250,7 +2250,7 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   child: const Text('Переслать в...',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold,
-                      color: Color(0xFF2A5298))),
+                      color: Color(0xFF7C3AED))),
                 ),
                 const Divider(height: 1),
                 Flexible(
@@ -2445,7 +2445,7 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
                   child: ElevatedButton(
                     onPressed: () => Navigator.pop(ctx),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2A5298),
+                      backgroundColor: const Color(0xFF7C3AED),
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
@@ -2481,7 +2481,7 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   child: const Text('Смайлики',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold,
-                      color: Color(0xFF2A5298))),
+                      color: Color(0xFF7C3AED))),
                 ),
                 const Divider(height: 1),
                 Expanded(
@@ -2582,7 +2582,7 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final chatBg = isDark ? const Color(0xFF0E1621) : const Color(0xFFECE5DD);
-    final myBubble = isDark ? const Color(0xFF2B5278) : const Color(0xFFDCF8C6);
+    final myBubble = isDark ? const Color(0xFF4C1D95) : const Color(0xFFE9D5FF);
     final myText = isDark ? Colors.white : Colors.black87;
     final otherBubble = isDark ? const Color(0xFF182533) : Colors.white;
     final otherText = isDark ? Colors.white : Colors.black87;
@@ -2592,7 +2592,7 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
       backgroundColor: chatBg,
       appBar: AppBar(
         titleSpacing: 0,
-        backgroundColor: const Color(0xFF2A5298),
+        backgroundColor: const Color(0xFF7C3AED),
         foregroundColor: Colors.white,
                 title: Row(
           children: [
@@ -2738,7 +2738,7 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
                                                       borderRadius: BorderRadius.circular(6),
                                                       border: const Border(
                                                         left: BorderSide(
-                                                          color: Color(0xFF2A5298), width: 3),
+                                                          color: Color(0xFF7C3AED), width: 3),
                                                       ),
                                                     ),
                                                     child: Column(
@@ -2750,7 +2750,7 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
                                                               ? msg['reply_sender_name']
                                                               : (msg['reply_sender_email'] as String? ?? ''),
                                                           style: const TextStyle(
-                                                            color: Color(0xFF2A5298),
+                                                            color: Color(0xFF7C3AED),
                                                             fontWeight: FontWeight.bold,
                                                             fontSize: 12,
                                                           ),
@@ -2782,7 +2782,7 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
                                                       imageUrl.isEmpty ? 0 : 8, 0),
                                                     child: Text(senderName,
                                                       style: const TextStyle(
-                                                        color: Color(0xFF2A5298),
+                                                        color: Color(0xFF7C3AED),
                                                         fontWeight: FontWeight.bold,
                                                         fontSize: 13)),
                                                   ),
@@ -2873,11 +2873,11 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
                                                         horizontal: 8, vertical: 3),
                                                       decoration: BoxDecoration(
                                                         color: iReacted
-                                                            ? (isDark ? const Color(0xFF2B5278) : const Color(0xFFDCF8C6))
+                                                            ? (isDark ? const Color(0xFF4C1D95) : const Color(0xFFE9D5FF))
                                                             : (isDark ? const Color(0xFF182533) : Colors.white),
                                                         borderRadius: BorderRadius.circular(12),
                                                         border: Border.all(
-                                                          color: iReacted ? const Color(0xFF2A5298) : Colors.grey.shade400,
+                                                          color: iReacted ? const Color(0xFF7C3AED) : Colors.grey.shade400,
                                                           width: 1),
                                                       ),
                                                       child: Text(
@@ -2913,7 +2913,7 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
                           decoration: BoxDecoration(
                             color: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFF0F0F0),
                             border: const Border(
-                              left: BorderSide(color: Color(0xFF2A5298), width: 3),
+                              left: BorderSide(color: Color(0xFF7C3AED), width: 3),
                             ),
                           ),
                           child: Row(
@@ -2926,7 +2926,7 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
                                     Text(
                                       'Ответ на: ${(_replyingTo['sender_name'] as String?) ?? (_replyingTo['sender_email'] as String?) ?? "сообщение"}',
                                       style: const TextStyle(
-                                        color: Color(0xFF2A5298),
+                                        color: Color(0xFF7C3AED),
                                         fontWeight: FontWeight.bold,
                                         fontSize: 12,
                                       ),
@@ -2967,12 +2967,12 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
                       Row(
                         children: [
                           IconButton(
-                            icon: const Icon(Icons.attach_file, color: Color(0xFF2A5298), size: 24),
+                            icon: const Icon(Icons.attach_file, color: Color(0xFF7C3AED), size: 24),
                             onPressed: _uploading ? null : _pickAndSendImage,
                             tooltip: 'Прикрепить фото',
                           ),
                           IconButton(
-                            icon: const Icon(Icons.emoji_emotions_outlined, color: Color(0xFF2A5298), size: 26),
+                            icon: const Icon(Icons.emoji_emotions_outlined, color: Color(0xFF7C3AED), size: 26),
                             onPressed: _showEmojiPicker,
                             tooltip: 'Смайлики',
                           ),
@@ -3008,7 +3008,7 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
                           const SizedBox(width: 6),
                           Container(
                             decoration: const BoxDecoration(
-                              color: Color(0xFF2A5298), shape: BoxShape.circle),
+                              color: Color(0xFF7C3AED), shape: BoxShape.circle),
                             child: IconButton(
                               icon: const Icon(Icons.send, color: Colors.white, size: 22),
                               onPressed: _sendMessage,
@@ -3067,7 +3067,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: const Color(0xFF2A5298),
+        backgroundColor: const Color(0xFF7C3AED),
         foregroundColor: Colors.white,
         title: const Text('Настройки'),
       ),
@@ -3109,12 +3109,12 @@ class _SettingsPageState extends State<SettingsPage> {
           SwitchListTile(
             secondary: Icon(
               isDark ? Icons.dark_mode : Icons.light_mode,
-              color: const Color(0xFF2A5298),
+              color: const Color(0xFF7C3AED),
             ),
             title: const Text('Тёмная тема'),
             subtitle: Text(isDark ? 'Включена' : 'Выключена'),
             value: isDark,
-            activeColor: const Color(0xFF2A5298),
+            activeColor: const Color(0xFF7C3AED),
             onChanged: (v) {
               themeNotifier.value = v ? ThemeMode.dark : ThemeMode.light;
               setState(() {});
@@ -3123,7 +3123,7 @@ class _SettingsPageState extends State<SettingsPage> {
           const Divider(),
 
           ListTile(
-            leading: const Icon(Icons.info_outline, color: Color(0xFF2A5298)),
+            leading: const Icon(Icons.info_outline, color: Color(0xFF7C3AED)),
             title: const Text('О приложении'),
             subtitle: const Text('ARKZIS v1.0'),
             trailing: const Icon(Icons.chevron_right, color: Colors.grey),
