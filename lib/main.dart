@@ -2002,7 +2002,7 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
     } catch (e) {}
   }
 
-  void _showMessageMenu(dynamic msg) {
+  void _showMessageMenu(dynamic msg) {    HapticFeedback.mediumImpact();
     final isMe = msg['from_user'] == widget.myId;
     final messageId = msg['id'];
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -2293,7 +2293,10 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
                                     ),
                                   GestureDetector(
                                     onLongPress: () => _showMessageMenu(msg),
-                                                                        onDoubleTap: () => _react(msg['id'], '❤️'),
+                                                                                                            onDoubleTap: () {
+                                      HapticFeedback.lightImpact();
+                                      _react(msg['id'], '❤️');
+                                    },
                                     child: Align(
                                       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
                                       child: Column(
@@ -2310,10 +2313,10 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
                                             decoration: BoxDecoration(
                                               color: isMe ? myBubble : otherBubble,
                                               borderRadius: BorderRadius.only(
-                                                topLeft: const Radius.circular(12),
-                                                topRight: const Radius.circular(12),
-                                                bottomLeft: Radius.circular(isMe ? 12 : 4),
-                                                bottomRight: Radius.circular(isMe ? 4 : 12),
+                                                                                                topLeft: const Radius.circular(18),
+                                                topRight: const Radius.circular(18),
+                                                bottomLeft: Radius.circular(isMe ? 18 : 6),
+                                                bottomRight: Radius.circular(isMe ? 6 : 18),
                                               ),
                                               boxShadow: [BoxShadow(
                                                 color: Colors.black.withOpacity(0.06),
