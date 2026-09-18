@@ -1540,11 +1540,12 @@ class _ChatPageState extends State<ChatPage> {
           final disp = await _prepareMessageDisplay(newMsg);
           newMsg['display_text'] = disp;
           await _prepareReplyDisplay(newMsg);
-          setState(() {
+                    setState(() {
             _messages.add(newMsg);
             if (from == widget.userId) _otherTyping = false;
           });
           _scrollToBottom();
+          if (from == widget.userId) _markChatRead();
         }
       }
     });
@@ -1575,6 +1576,28 @@ class _ChatPageState extends State<ChatPage> {
       });
       _scrollToBottom();
     });
+        _socket.on('messages_read', (data) {
+      if (data == null) return;
+
+      final chatId = data['chatId'];
+      final by = data['by'];
+      final withUserId = data['withUserId'];
+
+      setState(() {
+        for (final m in _messages) {
+          if (m['from_user'] == widget.myId && m['read_at'] == null) {
+            final matchChat = chatId != null && m['chat_id'] == chatId;
+            final matchPersonal = withUserId != null &&
+                m['chat_id'] == null &&
+                m['to_user'] == by;
+            if (matchChat || matchPersonal) {
+              m['read_at'] = DateTime.now().toIso8601String();
+            }
+          }
+        }
+      });
+    });
+
     _socket.on('message_deleted', (data) {
       if (data == null) return;
       final deletedId = data['id'];
@@ -1720,6 +1743,19 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
     }
   }
 
+    Future<void> _markChatRead() async {
+    try {
+      final body = (widget.isGroup || widget.isChannel)
+          ? {'userId': widget.myId, 'chatId': widget.chatId}
+          : {'userId': widget.myId, 'withUserId': widget.userId};
+      await http.post(
+        Uri.parse('$serverUrl/mark-read'),
+        headers: jsonHeaders,
+        body: jsonEncode(body),
+      );
+    } catch (e) {}
+  }
+
   Future<void> _loadMessages() async {
     try {
       final url = (widget.isGroup || widget.isChannel)
@@ -1735,12 +1771,13 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
           await _prepareReplyDisplay(m);
           processed.add(m);
         }
-        setState(() {
+                setState(() {
           _messages = processed;
           _loading = false;
           _error = '';
         });
         _scrollToBottom();
+        _markChatRead();
       } else {
         setState(() {
           _error = data['message'] ?? 'Ошибка';
@@ -2747,10 +2784,15 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
                                                           color: isMe
                                                               ? (isDark ? Colors.white70 : Colors.grey[600])
                                                               : Colors.grey[600])),
-                                                      if (isMe) ...[
+                                                                                                            if (isMe) ...[
                                                         const SizedBox(width: 4),
-                                                        Icon(Icons.done_all, size: 14,
-                                                          color: isDark ? Colors.lightBlue : Colors.blue[600]),
+                                                        Icon(
+                                                          Icons.done_all,
+                                                          size: 14,
+                                                          color: msg['read_at'] != null
+                                                              ? (isDark ? Colors.lightBlue : Colors.blue[600])
+                                                              : Colors.grey,
+                                                        ),
                                                       ],
                                                     ],
                                                   ),
