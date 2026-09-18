@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'dart:convert';
 import 'dart:io';
+import 'dart:async';
 
 class MyHttpOverrides extends HttpOverrides {
   @override
@@ -43,14 +44,35 @@ int myUserId = 0;
 String myEmail = '';
 String myName = '';
 
-Map<String, String> get baseHeaders => {
-      'Host': serverHost,
-    };
-
+Map<String, String> get baseHeaders => {'Host': serverHost};
 Map<String, String> get jsonHeaders => {
       'Content-Type': 'application/json',
       'Host': serverHost,
     };
+
+const List<String> emojis = [
+  '😀', '😁', '😂', '🤣', '😃', '😄', '😅', '😆', '😉', '😊',
+  '😋', '😎', '😍', '😘', '🥰', '😗', '😙', '😚', '☺️', '🙂',
+  '🤗', '🤩', '🤔', '🤨', '😐', '😑', '😶', '🙄', '😏', '😣',
+  '😥', '😮', '🤐', '😯', '😪', '😫', '🥱', '😴', '😌', '😛',
+  '😜', '😝', '🤤', '😒', '😓', '😔', '😕', '🙃', '🤑', '😲',
+  '☹️', '🙁', '😖', '😞', '😟', '😤', '😢', '😭', '😦', '😧',
+  '😨', '😩', '🤯', '😬', '😰', '😱', '🥵', '🥶', '😳', '🤪',
+  '😵', '🥴', '😠', '😡', '🤬', '😷', '🤒', '🤕', '🤢', '🤮',
+  '🥳', '🥺', '🤠', '🤡', '🤥', '🤫', '🤭', '🧐', '🤓', '😈',
+  '👍', '👎', '👌', '✌️', '🤞', '🤟', '🤘', '🤙', '👈', '👉',
+  '👆', '👇', '☝️', '✋', '🤚', '🖐', '🖖', '👋', '🤝', '🙏',
+  '💪', '🦾', '✍️', '💅', '👏', '🙌', '👐', '🤲', '🤜', '🤛',
+  '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔',
+  '❣️', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '💟', '☮️',
+  '🔥', '⭐', '🌟', '✨', '⚡', '💥', '💫', '💦', '💨', '🎉',
+  '🎊', '🎁', '🎈', '🏆', '🥇', '🥈', '🥉', '⚽', '🏀', '🎮',
+  '🍕', '🍔', '🍟', '🌮', '🍣', '🍩', '🍪', '🎂', '🍰', '🍫',
+  '☕', '🍵', '🍺', '🍻', '🥂', '🍷', '🥃', '🍸', '🍹', '🥤',
+];
+
+// Быстрые реакции — для меню
+const List<String> quickReactions = ['❤️', '👍', '😂', '🔥', '😮', '😢'];
 
 // ============= ЭКРАН ВХОДА =============
 class LoginPage extends StatefulWidget {
@@ -93,7 +115,6 @@ class _LoginPageState extends State<LoginPage> {
         myEmail = email;
         myName = '';
         if (!mounted) return;
-        // Переходим на экран ввода имени
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => const NamePage()),
@@ -284,7 +305,7 @@ class _LoginPageState extends State<LoginPage> {
   }
 }
 
-// ============= ЭКРАН ВВОДА ИМЕНИ =============
+// ============= ЭКРАН ИМЕНИ =============
 class NamePage extends StatefulWidget {
   const NamePage({super.key});
 
@@ -375,7 +396,7 @@ class _NamePageState extends State<NamePage> {
                     ),
                     const SizedBox(height: 8),
                     const Text(
-                      'Это имя увидят другие пользователи',
+                      'Это имя увидят другие',
                       style: TextStyle(fontSize: 14, color: Colors.grey),
                     ),
                     const SizedBox(height: 24),
@@ -417,7 +438,6 @@ class _NamePageState extends State<NamePage> {
                       const SizedBox(height: 16),
                       Text(
                         _message,
-                        textAlign: TextAlign.center,
                         style: TextStyle(
                           color: _isError ? Colors.red : Colors.green,
                           fontSize: 14,
@@ -447,33 +467,50 @@ class _UsersPageState extends State<UsersPage> {
   List<dynamic> _users = [];
   bool _loading = true;
   String _error = '';
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
     _loadUsers();
+    _refreshTimer = Timer.periodic(
+      const Duration(seconds: 10),
+      (_) => _loadUsers(silent: true),
+    );
   }
 
-  Future<void> _loadUsers() async {
-    setState(() {
-      _loading = true;
-      _error = '';
-    });
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadUsers({bool silent = false}) async {
+    if (!silent) {
+      setState(() {
+        _loading = true;
+        _error = '';
+      });
+    }
     try {
       final response = await http.get(
         Uri.parse('$serverUrl/users'),
         headers: baseHeaders,
       );
       final data = jsonDecode(response.body) as List;
-      setState(() {
-        _users = data;
-        _loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _users = data;
+          _loading = false;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _error = 'Ошибка загрузки: $e';
-        _loading = false;
-      });
+      if (!silent && mounted) {
+        setState(() {
+          _error = 'Ошибка загрузки: $e';
+          _loading = false;
+        });
+      }
     }
   }
 
@@ -515,21 +552,43 @@ class _UsersPageState extends State<UsersPage> {
                     final isMe = user['id'] == myUserId;
                     final email = user['email'] as String;
                     final name = (user['name'] as String?) ?? '';
+                    final online = user['online'] == true;
                     final displayName = name.isNotEmpty ? name : email;
                     final firstLetter = displayName.substring(0, 1).toUpperCase();
 
                     return ListTile(
-                      leading: CircleAvatar(
-                        radius: 26,
-                        backgroundColor: _avatarColor(email),
-                        child: Text(
-                          firstLetter,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 20,
+                      leading: Stack(
+                        children: [
+                          CircleAvatar(
+                            radius: 26,
+                            backgroundColor: _avatarColor(email),
+                            child: Text(
+                              firstLetter,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 20,
+                              ),
+                            ),
                           ),
-                        ),
+                          if (online && !isMe)
+                            Positioned(
+                              right: 0,
+                              bottom: 0,
+                              child: Container(
+                                width: 14,
+                                height: 14,
+                                decoration: BoxDecoration(
+                                  color: Colors.green,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.white,
+                                    width: 2,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                       title: Text(
                         displayName,
@@ -541,9 +600,15 @@ class _UsersPageState extends State<UsersPage> {
                       subtitle: Text(
                         isMe
                             ? 'это вы'
-                            : (name.isNotEmpty ? email : 'нажмите, чтобы открыть чат'),
+                            : online
+                                ? 'онлайн'
+                                : (name.isNotEmpty ? email : 'нажмите, чтобы открыть чат'),
                         style: TextStyle(
-                          color: isMe ? Colors.blue : Colors.grey[600],
+                          color: isMe
+                              ? Colors.blue
+                              : online
+                                  ? Colors.green
+                                  : Colors.grey[600],
                           fontSize: 13,
                         ),
                       ),
@@ -596,6 +661,9 @@ class _ChatPageState extends State<ChatPage> {
   String _error = '';
   late IO.Socket _socket;
 
+  bool _otherOnline = false;
+  bool _otherTyping = false;
+
   @override
   void initState() {
     super.initState();
@@ -616,7 +684,7 @@ class _ChatPageState extends State<ChatPage> {
     _socket.connect();
 
     _socket.onConnect((_) {
-      print('WebSocket подключён из приложения');
+      print('WebSocket подключён');
       _socket.emit('identify', widget.myId);
     });
 
@@ -636,8 +704,10 @@ class _ChatPageState extends State<ChatPage> {
               'to_user': to,
               'text': data['text'],
               'created_at': data['created_at'],
+              'reactions': [],
             });
           }
+          if (from == widget.userId) _otherTyping = false;
         });
         _scrollToBottom();
       }
@@ -647,19 +717,75 @@ class _ChatPageState extends State<ChatPage> {
       if (data == null) return;
       final deletedId = data['id'];
       if (deletedId == null) return;
-
       setState(() {
         _messages.removeWhere((m) => m['id'] == deletedId);
       });
     });
 
-    _socket.onDisconnect((_) {
-      print('WebSocket отключён');
+    // Обновление реакции
+    _socket.on('reaction_update', (data) {
+      if (data == null) return;
+      final mid = data['messageId'];
+      final uid = data['userId'];
+      final emoji = data['emoji'];
+      final action = data['action'];
+
+      setState(() {
+        final msg = _messages.firstWhere(
+          (m) => m['id'] == mid,
+          orElse: () => null,
+        );
+        if (msg == null) return;
+
+        List reactions = (msg['reactions'] as List?) ?? [];
+        reactions = List.from(reactions);
+
+        if (action == 'added') {
+          if (!reactions.any(
+              (r) => r['user_id'] == uid && r['emoji'] == emoji)) {
+            reactions.add({'user_id': uid, 'emoji': emoji});
+          }
+        } else if (action == 'removed') {
+          reactions.removeWhere(
+              (r) => r['user_id'] == uid && r['emoji'] == emoji);
+        }
+        msg['reactions'] = reactions;
+      });
     });
 
-    _socket.onConnectError((err) {
-      print('Ошибка WebSocket: $err');
+    _socket.on('online_list', (data) {
+      if (data is List) {
+        setState(() {
+          _otherOnline = data.contains(widget.userId);
+        });
+      }
     });
+
+    _socket.on('user_online', (data) {
+      if (data['userId'] == widget.userId) {
+        setState(() => _otherOnline = true);
+      }
+    });
+
+    _socket.on('user_offline', (data) {
+      if (data['userId'] == widget.userId) {
+        setState(() {
+          _otherOnline = false;
+          _otherTyping = false;
+        });
+      }
+    });
+
+    _socket.on('user_typing', (data) {
+      if (data['from'] == widget.userId) {
+        setState(() {
+          _otherTyping = data['typing'] == true;
+        });
+      }
+    });
+
+    _socket.onDisconnect((_) => print('WebSocket отключён'));
+    _socket.onConnectError((err) => print('Ошибка WebSocket: $err'));
   }
 
   @override
@@ -703,6 +829,7 @@ class _ChatPageState extends State<ChatPage> {
     if (text.isEmpty) return;
 
     _messageController.clear();
+    _socket.emit('typing', {'to': widget.userId, 'typing': false});
 
     try {
       final response = await http.post(
@@ -731,6 +858,7 @@ class _ChatPageState extends State<ChatPage> {
               'to_user': widget.userId,
               'text': text,
               'created_at': newCreated,
+              'reactions': [],
             });
           }
         });
@@ -769,9 +897,28 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
+  Future<void> _react(int messageId, String emoji) async {
+    try {
+      await http.post(
+        Uri.parse('$serverUrl/react'),
+        headers: jsonHeaders,
+        body: jsonEncode({
+          'messageId': messageId,
+          'userId': widget.myId,
+          'emoji': emoji,
+        }),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка реакции: $e')),
+      );
+    }
+  }
+
   void _showMessageMenu(dynamic msg) {
     final isMe = msg['from_user'] == widget.myId;
-    if (!isMe) return;
+    final messageId = msg['id'];
 
     showModalBottomSheet(
       context: context,
@@ -780,26 +927,120 @@ class _ChatPageState extends State<ChatPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              ListTile(
-                leading: const Icon(Icons.delete, color: Colors.red),
-                title: const Text(
-                  'Удалить сообщение',
-                  style: TextStyle(color: Colors.red),
+              // Быстрые реакции
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: quickReactions.map((emoji) {
+                    return InkWell(
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _react(messageId, emoji);
+                      },
+                      borderRadius: BorderRadius.circular(30),
+                      child: Container(
+                        padding: const EdgeInsets.all(10),
+                        child: Text(
+                          emoji,
+                          style: const TextStyle(fontSize: 30),
+                        ),
+                      ),
+                    );
+                  }).toList(),
                 ),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  final id = msg['id'];
-                  if (id != null) {
-                    _deleteMessage(id);
-                  }
-                },
               ),
+              const Divider(height: 1),
+              if (isMe)
+                ListTile(
+                  leading: const Icon(Icons.delete, color: Colors.red),
+                  title: const Text(
+                    'Удалить сообщение',
+                    style: TextStyle(color: Colors.red),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _deleteMessage(messageId);
+                  },
+                ),
               ListTile(
                 leading: const Icon(Icons.close),
                 title: const Text('Отмена'),
                 onTap: () => Navigator.pop(ctx),
               ),
             ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showEmojiPicker() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: SizedBox(
+            height: 320,
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: const Text(
+                    'Смайлики',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF2A5298),
+                    ),
+                  ),
+                ),
+                const Divider(height: 1),
+                Expanded(
+                  child: GridView.builder(
+                    padding: const EdgeInsets.all(8),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 8,
+                      mainAxisSpacing: 4,
+                      crossAxisSpacing: 4,
+                    ),
+                    itemCount: emojis.length,
+                    itemBuilder: (context, index) {
+                      return InkWell(
+                        onTap: () {
+                          final emoji = emojis[index];
+                          final text = _messageController.text;
+                          final selection = _messageController.selection;
+                          final cursorPos = selection.baseOffset >= 0
+                              ? selection.baseOffset
+                              : text.length;
+                          final newText = text.substring(0, cursorPos) +
+                              emoji +
+                              text.substring(cursorPos);
+                          _messageController.text = newText;
+                          _messageController.selection =
+                              TextSelection.collapsed(
+                            offset: cursorPos + emoji.length,
+                          );
+                        },
+                        borderRadius: BorderRadius.circular(8),
+                        child: Center(
+                          child: Text(
+                            emojis[index],
+                            style: const TextStyle(fontSize: 26),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -864,6 +1105,19 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
+  // Группировка реакций: emoji -> [user_ids]
+  Map<String, List<int>> _groupReactions(List reactions) {
+    final map = <String, List<int>>{};
+    for (final r in reactions) {
+      final emoji = r['emoji'] as String? ?? '';
+      final uid = r['user_id'] as int? ?? 0;
+      if (emoji.isEmpty) continue;
+      map.putIfAbsent(emoji, () => []);
+      map[emoji]!.add(uid);
+    }
+    return map;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -874,23 +1128,61 @@ class _ChatPageState extends State<ChatPage> {
         foregroundColor: Colors.white,
         title: Row(
           children: [
-            CircleAvatar(
-              radius: 18,
-              backgroundColor: Colors.white24,
-              child: Text(
-                widget.userEmail.substring(0, 1).toUpperCase(),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
+            Stack(
+              children: [
+                CircleAvatar(
+                  radius: 18,
+                  backgroundColor: Colors.white24,
+                  child: Text(
+                    widget.userEmail.substring(0, 1).toUpperCase(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
-              ),
+                if (_otherOnline)
+                  Positioned(
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        color: Colors.green,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                      ),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(
-                widget.userEmail,
-                style: const TextStyle(fontSize: 16),
-                overflow: TextOverflow.ellipsis,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    widget.userEmail,
+                    style: const TextStyle(fontSize: 16),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (_otherTyping)
+                    const Text(
+                      'печатает...',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.white70,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    )
+                  else if (_otherOnline)
+                    const Text(
+                      'онлайн',
+                      style: TextStyle(fontSize: 12, color: Colors.white70),
+                    ),
+                ],
               ),
             ),
           ],
@@ -926,6 +1218,9 @@ class _ChatPageState extends State<ChatPage> {
                               final msg = _messages[index];
                               final isMe = msg['from_user'] == widget.myId;
                               final showDate = _shouldShowDate(index);
+                              final reactions =
+                                  (msg['reactions'] as List?) ?? [];
+                              final grouped = _groupReactions(reactions);
 
                               return Column(
                                 children: [
@@ -960,77 +1255,140 @@ class _ChatPageState extends State<ChatPage> {
                                       alignment: isMe
                                           ? Alignment.centerRight
                                           : Alignment.centerLeft,
-                                      child: Container(
-                                        margin: const EdgeInsets.symmetric(
-                                          vertical: 2,
-                                          horizontal: 4,
-                                        ),
-                                        padding: const EdgeInsets.fromLTRB(
-                                          12,
-                                          8,
-                                          12,
-                                          6,
-                                        ),
-                                        constraints: const BoxConstraints(
-                                          maxWidth: 300,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: isMe
-                                              ? const Color(0xFFDCF8C6)
-                                              : Colors.white,
-                                          borderRadius: BorderRadius.only(
-                                            topLeft: const Radius.circular(12),
-                                            topRight: const Radius.circular(12),
-                                            bottomLeft: Radius.circular(
-                                                isMe ? 12 : 4),
-                                            bottomRight: Radius.circular(
-                                                isMe ? 4 : 12),
-                                          ),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: Colors.black
-                                                  .withOpacity(0.06),
-                                              blurRadius: 2,
-                                              offset: const Offset(0, 1),
+                                      child: Column(
+                                        crossAxisAlignment: isMe
+                                            ? CrossAxisAlignment.end
+                                            : CrossAxisAlignment.start,
+                                        children: [
+                                          Container(
+                                            margin: const EdgeInsets.symmetric(
+                                              vertical: 2,
+                                              horizontal: 4,
                                             ),
-                                          ],
-                                        ),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.end,
-                                          children: [
-                                            Text(
-                                              msg['text'] ?? '',
-                                              style: const TextStyle(
-                                                color: Colors.black87,
-                                                fontSize: 15,
-                                                height: 1.3,
+                                            padding: const EdgeInsets.fromLTRB(
+                                              12,
+                                              8,
+                                              12,
+                                              6,
+                                            ),
+                                            constraints: const BoxConstraints(
+                                              maxWidth: 300,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: isMe
+                                                  ? const Color(0xFFDCF8C6)
+                                                  : Colors.white,
+                                              borderRadius: BorderRadius.only(
+                                                topLeft:
+                                                    const Radius.circular(12),
+                                                topRight:
+                                                    const Radius.circular(12),
+                                                bottomLeft: Radius.circular(
+                                                    isMe ? 12 : 4),
+                                                bottomRight: Radius.circular(
+                                                    isMe ? 4 : 12),
                                               ),
-                                            ),
-                                            const SizedBox(height: 2),
-                                            Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Text(
-                                                  _formatTime(
-                                                      msg['created_at']),
-                                                  style: TextStyle(
-                                                    fontSize: 11,
-                                                    color: Colors.grey[600],
-                                                  ),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: Colors.black
+                                                      .withOpacity(0.06),
+                                                  blurRadius: 2,
+                                                  offset: const Offset(0, 1),
                                                 ),
-                                                if (isMe) ...[
-                                                  const SizedBox(width: 4),
-                                                  Icon(
-                                                    Icons.done_all,
-                                                    size: 14,
-                                                    color: Colors.blue[600],
-                                                  ),
-                                                ],
                                               ],
                                             ),
-                                          ],
-                                        ),
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.end,
+                                              children: [
+                                                Text(
+                                                  msg['text'] ?? '',
+                                                  style: const TextStyle(
+                                                    color: Colors.black87,
+                                                    fontSize: 15,
+                                                    height: 1.3,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 2),
+                                                Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Text(
+                                                      _formatTime(
+                                                          msg['created_at']),
+                                                      style: TextStyle(
+                                                        fontSize: 11,
+                                                        color: Colors.grey[600],
+                                                      ),
+                                                    ),
+                                                    if (isMe) ...[
+                                                      const SizedBox(width: 4),
+                                                      Icon(
+                                                        Icons.done_all,
+                                                        size: 14,
+                                                        color: Colors.blue[600],
+                                                      ),
+                                                    ],
+                                                  ],
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          // Реакции под сообщением
+                                          if (grouped.isNotEmpty)
+                                            Padding(
+                                              padding:
+                                                  const EdgeInsets.only(
+                                                      left: 8, right: 8),
+                                              child: Wrap(
+                                                spacing: 4,
+                                                children: grouped.entries
+                                                    .map((entry) {
+                                                  final emoji = entry.key;
+                                                  final users = entry.value;
+                                                  final iReacted = users
+                                                      .contains(widget.myId);
+                                                  return GestureDetector(
+                                                    onTap: () => _react(
+                                                        msg['id'], emoji),
+                                                    child: Container(
+                                                      padding:
+                                                          const EdgeInsets
+                                                              .symmetric(
+                                                        horizontal: 8,
+                                                        vertical: 3,
+                                                      ),
+                                                      decoration: BoxDecoration(
+                                                        color: iReacted
+                                                            ? const Color(
+                                                                0xFFDCF8C6)
+                                                            : Colors.white,
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(12),
+                                                        border: Border.all(
+                                                          color: iReacted
+                                                              ? const Color(
+                                                                  0xFF2A5298)
+                                                              : Colors
+                                                                  .grey
+                                                                  .shade300,
+                                                          width: 1,
+                                                        ),
+                                                      ),
+                                                      child: Text(
+                                                        users.length > 1
+                                                            ? '$emoji ${users.length}'
+                                                            : emoji,
+                                                        style: const TextStyle(
+                                                            fontSize: 14),
+                                                      ),
+                                                    ),
+                                                  );
+                                                }).toList(),
+                                              ),
+                                            ),
+                                        ],
                                       ),
                                     ),
                                   ),
@@ -1053,9 +1411,24 @@ class _ChatPageState extends State<ChatPage> {
             ),
             child: Row(
               children: [
+                IconButton(
+                  icon: const Icon(
+                    Icons.emoji_emotions_outlined,
+                    color: Color(0xFF2A5298),
+                    size: 26,
+                  ),
+                  onPressed: _showEmojiPicker,
+                  tooltip: 'Смайлики',
+                ),
                 Expanded(
                   child: TextField(
                     controller: _messageController,
+                    onChanged: (text) {
+                      _socket.emit('typing', {
+                        'to': widget.userId,
+                        'typing': text.trim().isNotEmpty,
+                      });
+                    },
                     decoration: InputDecoration(
                       hintText: 'Сообщение...',
                       filled: true,
