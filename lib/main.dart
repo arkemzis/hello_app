@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'package:image_picker/image_picker.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:async';
@@ -488,7 +489,7 @@ class _NamePageState extends State<NamePage> {
   }
 }
 
-// ============= ЭКРАН ПОЛЬЗОВАТЕЛЕЙ С ПОИСКОМ =============
+// ============= ЭКРАН ПОЛЬЗОВАТЕЛЕЙ =============
 class UsersPage extends StatefulWidget {
   const UsersPage({super.key});
 
@@ -772,8 +773,10 @@ class ChatPage extends StatefulWidget {
 class _ChatPageState extends State<ChatPage> {
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
+  final ImagePicker _picker = ImagePicker();
   List<dynamic> _messages = [];
   bool _loading = true;
+  bool _uploading = false;
   String _error = '';
   late IO.Socket _socket;
 
@@ -800,7 +803,6 @@ class _ChatPageState extends State<ChatPage> {
     _socket.connect();
 
     _socket.onConnect((_) {
-      print('WebSocket подключён');
       _socket.emit('identify', widget.myId);
     });
 
@@ -818,7 +820,8 @@ class _ChatPageState extends State<ChatPage> {
               'id': newId,
               'from_user': from,
               'to_user': to,
-              'text': data['text'],
+              'text': data['text'] ?? '',
+              'image_url': data['image_url'] ?? '',
               'created_at': data['created_at'],
               'reactions': [],
             });
@@ -899,8 +902,8 @@ class _ChatPageState extends State<ChatPage> {
       }
     });
 
-    _socket.onDisconnect((_) => print('WebSocket отключён'));
-    _socket.onConnectError((err) => print('Ошибка WebSocket: $err'));
+    _socket.onDisconnect((_) {});
+    _socket.onConnectError((err) {});
   }
 
   @override
@@ -972,6 +975,7 @@ class _ChatPageState extends State<ChatPage> {
               'from_user': widget.myId,
               'to_user': widget.userId,
               'text': text,
+              'image_url': '',
               'created_at': newCreated,
               'reactions': [],
             });
@@ -984,6 +988,84 @@ class _ChatPageState extends State<ChatPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Ошибка отправки: $e')),
       );
+    }
+  }
+
+  Future<void> _pickAndSendImage() async {
+    try {
+      final XFile? picked = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 80,
+      );
+      if (picked == null) return;
+
+      setState(() => _uploading = true);
+
+      final uri = Uri.parse('$serverUrl/upload');
+      final request = http.MultipartRequest('POST', uri);
+      request.headers['Host'] = serverHost;
+      request.files.add(await http.MultipartFile.fromPath('image', picked.path));
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode != 200) {
+        if (!mounted) return;
+        setState(() => _uploading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Не удалось загрузить фото')),
+        );
+        return;
+      }
+
+      final data = jsonDecode(response.body);
+      if (data['ok'] != true || data['imageUrl'] == null) {
+        if (!mounted) return;
+        setState(() => _uploading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Ошибка загрузки')),
+        );
+        return;
+      }
+
+      final imageUrl = data['imageUrl'];
+
+      final sendResponse = await http.post(
+        Uri.parse('$serverUrl/send'),
+        headers: jsonHeaders,
+        body: jsonEncode({
+          'to': widget.userId,
+          'text': '',
+          'from': widget.myId,
+          'imageUrl': imageUrl,
+        }),
+      );
+      final sendData = jsonDecode(sendResponse.body);
+      if (sendData['ok'] == true) {
+        final newId = sendData['id'];
+        final newCreated = sendData['created_at'];
+        setState(() {
+          if (!_messages.any((m) => m['id'] == newId)) {
+            _messages.add({
+              'id': newId,
+              'from_user': widget.myId,
+              'to_user': widget.userId,
+              'text': '',
+              'image_url': imageUrl,
+              'created_at': newCreated,
+              'reactions': [],
+            });
+          }
+        });
+        _scrollToBottom();
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _uploading = false);
     }
   }
 
@@ -1023,12 +1105,7 @@ class _ChatPageState extends State<ChatPage> {
           'emoji': emoji,
         }),
       );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка реакции: $e')),
-      );
-    }
+    } catch (e) {}
   }
 
   void _showMessageMenu(dynamic msg) {
@@ -1350,6 +1427,9 @@ class _ChatPageState extends State<ChatPage> {
                               final reactions =
                                   (msg['reactions'] as List?) ?? [];
                               final grouped = _groupReactions(reactions);
+                              final imageUrl =
+                                  (msg['image_url'] as String?) ?? '';
+                              final text = (msg['text'] as String?) ?? '';
 
                               return Column(
                                 children: [
@@ -1395,12 +1475,10 @@ class _ChatPageState extends State<ChatPage> {
                                               vertical: 2,
                                               horizontal: 4,
                                             ),
-                                            padding: const EdgeInsets.fromLTRB(
-                                              12,
-                                              8,
-                                              12,
-                                              6,
-                                            ),
+                                            padding: imageUrl.isEmpty
+                                                ? const EdgeInsets.fromLTRB(
+                                                    12, 8, 12, 6)
+                                                : const EdgeInsets.all(4),
                                             constraints: const BoxConstraints(
                                               maxWidth: 300,
                                             ),
@@ -1431,47 +1509,109 @@ class _ChatPageState extends State<ChatPage> {
                                               crossAxisAlignment:
                                                   CrossAxisAlignment.end,
                                               children: [
-                                                Text(
-                                                  msg['text'] ?? '',
-                                                  style: TextStyle(
-                                                    color: isMe
-                                                        ? myText
-                                                        : otherText,
-                                                    fontSize: 15,
-                                                    height: 1.3,
+                                                if (imageUrl.isNotEmpty)
+                                                  ClipRRect(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            8),
+                                                    child: Image.network(
+                                                      '$serverUrl$imageUrl',
+                                                      headers: {
+                                                        'Host': serverHost,
+                                                      },
+                                                      width: 260,
+                                                      fit: BoxFit.cover,
+                                                      loadingBuilder:
+                                                          (context, child,
+                                                              progress) {
+                                                        if (progress == null)
+                                                          return child;
+                                                        return Container(
+                                                          width: 260,
+                                                          height: 200,
+                                                          alignment: Alignment
+                                                              .center,
+                                                          child:
+                                                              const CircularProgressIndicator(),
+                                                        );
+                                                      },
+                                                      errorBuilder: (context,
+                                                              error,
+                                                              stackTrace) {
+                                                        return Container(
+                                                          width: 260,
+                                                          height: 200,
+                                                          alignment: Alignment
+                                                              .center,
+                                                          child: const Icon(
+                                                            Icons.broken_image,
+                                                            size: 50,
+                                                            color: Colors.grey,
+                                                          ),
+                                                        );
+                                                      },
+                                                    ),
                                                   ),
-                                                ),
-                                                const SizedBox(height: 2),
-                                                Row(
-                                                  mainAxisSize:
-                                                      MainAxisSize.min,
-                                                  children: [
-                                                    Text(
-                                                      _formatTime(
-                                                          msg['created_at']),
+                                                if (text.isNotEmpty)
+                                                  Padding(
+                                                    padding: EdgeInsets.fromLTRB(
+                                                      imageUrl.isEmpty ? 0 : 8,
+                                                      imageUrl.isEmpty ? 0 : 4,
+                                                      imageUrl.isEmpty ? 0 : 8,
+                                                      0,
+                                                    ),
+                                                    child: Text(
+                                                      text,
                                                       style: TextStyle(
-                                                        fontSize: 11,
                                                         color: isMe
-                                                            ? (isDark
-                                                                ? Colors
-                                                                    .white70
-                                                                : Colors
-                                                                    .grey[600])
-                                                            : Colors
-                                                                .grey[600],
+                                                            ? myText
+                                                            : otherText,
+                                                        fontSize: 15,
+                                                        height: 1.3,
                                                       ),
                                                     ),
-                                                    if (isMe) ...[
-                                                      const SizedBox(width: 4),
-                                                      Icon(
-                                                        Icons.done_all,
-                                                        size: 14,
-                                                        color: isDark
-                                                            ? Colors.lightBlue
-                                                            : Colors.blue[600],
+                                                  ),
+                                                Padding(
+                                                  padding: EdgeInsets.fromLTRB(
+                                                    imageUrl.isEmpty ? 0 : 8,
+                                                    2,
+                                                    imageUrl.isEmpty ? 0 : 8,
+                                                    imageUrl.isEmpty ? 0 : 4,
+                                                  ),
+                                                  child: Row(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: [
+                                                      Text(
+                                                        _formatTime(
+                                                            msg['created_at']),
+                                                        style: TextStyle(
+                                                          fontSize: 11,
+                                                          color: isMe
+                                                              ? (isDark
+                                                                  ? Colors
+                                                                      .white70
+                                                                  : Colors
+                                                                      .grey[600])
+                                                              : Colors
+                                                                  .grey[600],
+                                                        ),
                                                       ),
+                                                      if (isMe) ...[
+                                                        const SizedBox(
+                                                            width: 4),
+                                                        Icon(
+                                                          Icons.done_all,
+                                                          size: 14,
+                                                          color: isDark
+                                                              ? Colors
+                                                                  .lightBlue
+                                                              : Colors
+                                                                  .blue[600],
+                                                        ),
+                                                      ],
                                                     ],
-                                                  ],
+                                                  ),
                                                 ),
                                               ],
                                             ),
@@ -1489,8 +1629,8 @@ class _ChatPageState extends State<ChatPage> {
                                                   final iReacted = users
                                                       .contains(widget.myId);
                                                   return GestureDetector(
-                                                    onTap: () =>
-                                                        _react(msg['id'], emoji),
+                                                    onTap: () => _react(
+                                                        msg['id'], emoji),
                                                     child: Container(
                                                       padding:
                                                           const EdgeInsets
@@ -1555,58 +1695,77 @@ class _ChatPageState extends State<ChatPage> {
                 ),
               ],
             ),
-            child: Row(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                IconButton(
-                  icon: const Icon(
-                    Icons.emoji_emotions_outlined,
-                    color: Color(0xFF2A5298),
-                    size: 26,
+                if (_uploading)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 8),
+                    child: LinearProgressIndicator(),
                   ),
-                  onPressed: _showEmojiPicker,
-                  tooltip: 'Смайлики',
-                ),
-                Expanded(
-                  child: TextField(
-                    controller: _messageController,
-                    onChanged: (text) {
-                      _socket.emit('typing', {
-                        'to': widget.userId,
-                        'typing': text.trim().isNotEmpty,
-                      });
-                    },
-                    decoration: InputDecoration(
-                      hintText: 'Сообщение...',
-                      filled: true,
-                      fillColor: isDark
-                          ? const Color(0xFF2A2A2A)
-                          : const Color(0xFFF5F5F5),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
-                        borderSide: BorderSide.none,
+                Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(
+                        Icons.attach_file,
+                        color: Color(0xFF2A5298),
+                        size: 24,
                       ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 18,
-                        vertical: 12,
+                      onPressed: _uploading ? null : _pickAndSendImage,
+                      tooltip: 'Прикрепить фото',
+                    ),
+                    IconButton(
+                      icon: const Icon(
+                        Icons.emoji_emotions_outlined,
+                        color: Color(0xFF2A5298),
+                        size: 26,
+                      ),
+                      onPressed: _showEmojiPicker,
+                      tooltip: 'Смайлики',
+                    ),
+                    Expanded(
+                      child: TextField(
+                        controller: _messageController,
+                        onChanged: (text) {
+                          _socket.emit('typing', {
+                            'to': widget.userId,
+                            'typing': text.trim().isNotEmpty,
+                          });
+                        },
+                        decoration: InputDecoration(
+                          hintText: 'Сообщение...',
+                          filled: true,
+                          fillColor: isDark
+                              ? const Color(0xFF2A2A2A)
+                              : const Color(0xFFF5F5F5),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(24),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 18,
+                            vertical: 12,
+                          ),
+                        ),
+                        onSubmitted: (_) => _sendMessage(),
                       ),
                     ),
-                    onSubmitted: (_) => _sendMessage(),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Container(
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF2A5298),
-                    shape: BoxShape.circle,
-                  ),
-                  child: IconButton(
-                    icon: const Icon(
-                      Icons.send,
-                      color: Colors.white,
-                      size: 22,
+                    const SizedBox(width: 6),
+                    Container(
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF2A5298),
+                        shape: BoxShape.circle,
+                      ),
+                      child: IconButton(
+                        icon: const Icon(
+                          Icons.send,
+                          color: Colors.white,
+                          size: 22,
+                        ),
+                        onPressed: _sendMessage,
+                      ),
                     ),
-                    onPressed: _sendMessage,
-                  ),
+                  ],
                 ),
               ],
             ),
