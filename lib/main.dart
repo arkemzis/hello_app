@@ -2088,6 +2088,102 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
       },
     );
   }
+  void _openProfile() {
+    final isGroupOrChannel = widget.isGroup || widget.isChannel;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: isDark ? const Color(0xFF1F1F1F) : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AvatarWidget(
+                  avatarUrl: widget.userAvatar,
+                  displayName: widget.userEmail,
+                  email: widget.userEmail,
+                  radius: 60,
+                  online: _otherOnline,
+                  showOnline: !isGroupOrChannel,
+                  customIcon: widget.isChannel
+                      ? Icons.campaign
+                      : (widget.isGroup ? Icons.groups : null),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  widget.userEmail,
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                if (isGroupOrChannel)
+                  Text(
+                    widget.isChannel
+                        ? '${_membersMap.length} подписчик(ов)'
+                        : '${_membersMap.length} участник(ов)',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: isDark ? Colors.white70 : Colors.grey[600],
+                    ),
+                  )
+                else
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: _otherOnline ? Colors.green : Colors.grey,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        _otherOnline ? 'онлайн' : 'не в сети',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: _otherOnline
+                              ? Colors.green
+                              : (isDark ? Colors.white70 : Colors.grey[600]),
+                        ),
+                      ),
+                    ],
+                  ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2A5298),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Text('Закрыть', style: TextStyle(fontSize: 16)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   void _showEmojiPicker() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -2220,16 +2316,19 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
         titleSpacing: 0,
         backgroundColor: const Color(0xFF2A5298),
         foregroundColor: Colors.white,
-        title: Row(
+                title: Row(
           children: [
-            AvatarWidget(
-              avatarUrl: widget.userAvatar,
-              displayName: widget.userEmail,
-              email: widget.userEmail,
-              radius: 18,
-              online: _otherOnline,
-              showOnline: !widget.isGroup && !widget.isChannel,
-              customIcon: widget.isChannel ? Icons.campaign : (widget.isGroup ? Icons.groups : null),
+            GestureDetector(
+              onTap: _openProfile,
+              child: AvatarWidget(
+                avatarUrl: widget.userAvatar,
+                displayName: widget.userEmail,
+                email: widget.userEmail,
+                radius: 18,
+                online: _otherOnline,
+                showOnline: !widget.isGroup && !widget.isChannel,
+                customIcon: widget.isChannel ? Icons.campaign : (widget.isGroup ? Icons.groups : null),
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
