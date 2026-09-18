@@ -2035,8 +2035,8 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
                 ),
               ),
              
-              const Divider(height: 1),
-                            ListTile(
+                            const Divider(height: 1),
+              ListTile(
                 leading: const Icon(Icons.reply, color: Color(0xFF2A5298)),
                 title: const Text('Ответить'),
                 onTap: () {
@@ -2044,6 +2044,21 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
                   setState(() => _replyingTo = msg);
                 },
               ),
+              if ((msg['display_text'] as String?)?.isNotEmpty == true)
+                ListTile(
+                  leading: const Icon(Icons.copy, color: Color(0xFF2A5298)),
+                  title: const Text('Копировать'),
+                  onTap: () {
+                    Clipboard.setData(ClipboardData(text: msg['display_text']));
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Скопировано'),
+                        duration: Duration(seconds: 1),
+                      ),
+                    );
+                  },
+                ),
               if (isMe)
                 ListTile(
                   leading: const Icon(Icons.edit, color: Color(0xFF2A5298)),
