@@ -1523,7 +1523,7 @@ class _ChatPageState extends State<ChatPage> {
             (from == widget.myId && to == widget.userId)) {
           final newId = data['id'];
           if (_messages.any((m) => m['id'] == newId)) return;
-          final newMsg = {
+                    final newMsg = {
             'id': newId,
             'from_user': from,
             'to_user': to,
@@ -1531,9 +1531,15 @@ class _ChatPageState extends State<ChatPage> {
             'image_url': data['image_url'] ?? '',
             'created_at': data['created_at'],
             'reactions': [],
+            'reply_to_id': data['reply_to_id'],
+            'reply_text': data['reply_text'],
+            'reply_image_url': data['reply_image_url'],
+            'reply_sender_name': data['reply_sender_name'],
+            'reply_sender_email': data['reply_sender_email'],
           };
           final disp = await _prepareMessageDisplay(newMsg);
           newMsg['display_text'] = disp;
+          await _prepareReplyDisplay(newMsg);
           setState(() {
             _messages.add(newMsg);
             if (from == widget.userId) _otherTyping = false;
@@ -1698,6 +1704,22 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
     return text;
   }
 
+    Future<void> _prepareReplyDisplay(dynamic msg) async {
+    final replyText = (msg['reply_text'] as String?) ?? '';
+    if (replyText.startsWith('E2EE:') &&
+        widget.userPublicKey.isNotEmpty &&
+        !widget.isGroup &&
+        !widget.isChannel) {
+      final dec = await E2EE.decrypt(
+        replyText.substring(5),
+        widget.userPublicKey,
+      );
+      msg['reply_display_text'] = dec ?? replyText;
+    } else {
+      msg['reply_display_text'] = replyText;
+    }
+  }
+
   Future<void> _loadMessages() async {
     try {
       final url = (widget.isGroup || widget.isChannel)
@@ -1708,8 +1730,9 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
       if (data['ok'] == true) {
         final raw = data['messages'] as List;
         final processed = <dynamic>[];
-        for (final m in raw) {
+                for (final m in raw) {
           m['display_text'] = await _prepareMessageDisplay(m);
+          await _prepareReplyDisplay(m);
           processed.add(m);
         }
         setState(() {
@@ -2641,9 +2664,9 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
                                                           overflow: TextOverflow.ellipsis,
                                                         ),
                                                         const SizedBox(height: 2),
-                                                        Text(
-                                                          (msg['reply_text'] as String?)?.isNotEmpty == true
-                                                              ? msg['reply_text']
+                                                                                                                Text(
+                                                          (msg['reply_display_text'] as String?)?.isNotEmpty == true
+                                                              ? msg['reply_display_text']
                                                               : ((msg['reply_image_url'] as String?)?.isNotEmpty == true
                                                                   ? '📷 Фото'
                                                                   : ''),
