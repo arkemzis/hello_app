@@ -32,7 +32,7 @@ class MyApp extends StatelessWidget {
       valueListenable: themeNotifier,
       builder: (context, mode, _) {
         return MaterialApp(
-          title: 'Мой Мессенджер',
+          title: 'ARKZIS',
           debugShowCheckedModeBanner: false,
           themeMode: mode,
           theme: ThemeData(
@@ -733,11 +733,11 @@ class _LoginPageState extends State<LoginPage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text('Мой Мессенджер',
-                      style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Color(0xFF2A5298))),
+                    const Text('ARKZIS',
+                      style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Color(0xFF2A5298), letterSpacing: 2)),
                     const SizedBox(height: 8),
-                    Text('Войдите, чтобы продолжить',
-                      style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+                    const Text('Connect without limits',
+                      style: TextStyle(fontSize: 14, color: Colors.grey)),
                     const SizedBox(height: 24),
                     TextField(
                       controller: _emailController,
@@ -3125,17 +3125,17 @@ class _SettingsPageState extends State<SettingsPage> {
           ListTile(
             leading: const Icon(Icons.info_outline, color: Color(0xFF2A5298)),
             title: const Text('О приложении'),
-            subtitle: const Text('Мой Мессенджер v1.0'),
+            subtitle: const Text('ARKZIS v1.0'),
             trailing: const Icon(Icons.chevron_right, color: Colors.grey),
             onTap: () {
               showDialog(
                 context: context,
                 builder: (ctx) => AlertDialog(
-                  title: const Text('Мой Мессенджер'),
+                  title: const Text('ARKZIS'),
                   content: const Text(
-                    'Версия 1.0\n\n'
-                    'Мессенджер с E2EE-шифрованием личных сообщений.\n\n'
-                    'Группы, каналы, сторис, реакции, ответы, пересылка.',
+                    'ARKZIS v1.0\n\n'
+                    'Connect without limits.\n\n'
+                    'E2EE-шифрование, группы, каналы, сторис, реакции, ответы, пересылка.',
                   ),
                   actions: [
                     TextButton(
