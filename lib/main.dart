@@ -2044,7 +2044,7 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
                   setState(() => _replyingTo = msg);
                 },
               ),
-              if ((msg['display_text'] as String?)?.isNotEmpty == true)
+                            if ((msg['display_text'] as String?)?.isNotEmpty == true)
                 ListTile(
                   leading: const Icon(Icons.copy, color: Color(0xFF2A5298)),
                   title: const Text('Копировать'),
@@ -2059,6 +2059,14 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
                     );
                   },
                 ),
+              ListTile(
+                leading: const Icon(Icons.forward, color: Color(0xFF2A5298)),
+                title: const Text('Переслать'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _forwardMessage(msg);
+                },
+              ),
               if (isMe)
                 ListTile(
                   leading: const Icon(Icons.edit, color: Color(0xFF2A5298)),
@@ -2087,7 +2095,158 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
         );
       },
     );
+   }
+
+  Future<void> _forwardMessage(dynamic msg) async {
+    final displayText = (msg['display_text'] as String?) ?? '';
+    final imageUrl = (msg['image_url'] as String?) ?? '';
+    if (displayText.isEmpty && imageUrl.isEmpty) return;
+
+    try {
+      final usersResp = await http.get(
+        Uri.parse('$serverUrl/users'), headers: baseHeaders);
+      final allUsers = jsonDecode(usersResp.body) as List;
+      final otherUsers = allUsers.where((u) => u['id'] != widget.myId).toList();
+
+      final chatsResp = await http.get(
+        Uri.parse('$serverUrl/my-chats?userId=${widget.myId}'), headers: baseHeaders);
+      final chatsData = jsonDecode(chatsResp.body);
+      final groups = (chatsData['ok'] == true) ? (chatsData['chats'] as List) : [];
+
+      if (!mounted) return;
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+
+      showModalBottomSheet(
+        context: context,
+        backgroundColor: isDark ? const Color(0xFF1F1F1F) : Colors.white,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        ),
+        builder: (ctx) {
+          return SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: const Text('Переслать в...',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold,
+                      color: Color(0xFF2A5298))),
+                ),
+                const Divider(height: 1),
+                Flexible(
+                  child: ListView(
+                    shrinkWrap: true,
+                    children: [
+                      for (final chat in groups)
+                        ListTile(
+                          leading: AvatarWidget(
+                            avatarUrl: '',
+                            displayName: chat['name'] ?? '',
+                            email: chat['name'] ?? '',
+                            radius: 22,
+                            customIcon: chat['is_channel'] == true
+                                ? Icons.campaign
+                                : Icons.groups,
+                          ),
+                          title: Text(chat['name'] ?? ''),
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            _sendForwarded(
+                              text: displayText,
+                              imageUrl: imageUrl,
+                              chatId: chat['id'],
+                              toUserId: null,
+                              toPublicKey: null,
+                            );
+                          },
+                        ),
+                      for (final user in otherUsers)
+                        ListTile(
+                          leading: AvatarWidget(
+                            avatarUrl: (user['avatar_url'] as String?) ?? '',
+                            displayName: (user['name'] as String?)?.isNotEmpty == true
+                                ? user['name'] : (user['email'] as String? ?? ''),
+                            email: (user['email'] as String?) ?? '',
+                            radius: 22,
+                          ),
+                          title: Text((user['name'] as String?)?.isNotEmpty == true
+                              ? user['name'] : (user['email'] as String? ?? '')),
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            _sendForwarded(
+                              text: displayText,
+                              imageUrl: imageUrl,
+                              chatId: null,
+                              toUserId: user['id'],
+                              toPublicKey: user['public_key'] as String?,
+                            );
+                          },
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка: $e')),
+      );
+    }
   }
+
+  Future<void> _sendForwarded({
+    required String text,
+    required String imageUrl,
+    required int? chatId,
+    required int? toUserId,
+    required String? toPublicKey,
+  }) async {
+    String sendText = text;
+
+    if (toUserId != null && toPublicKey != null && toPublicKey.isNotEmpty && text.isNotEmpty) {
+      final enc = await E2EE.encrypt(text, toPublicKey);
+      if (enc != null) sendText = 'E2EE:$enc';
+    }
+
+    final body = (chatId != null)
+        ? {
+            'chatId': chatId,
+            'text': text,
+            'from': widget.myId,
+            if (imageUrl.isNotEmpty) 'imageUrl': imageUrl,
+          }
+        : {
+            'to': toUserId,
+            'text': sendText,
+            'from': widget.myId,
+            if (imageUrl.isNotEmpty) 'imageUrl': imageUrl,
+          };
+
+    try {
+      final resp = await http.post(
+        Uri.parse('$serverUrl/send'),
+        headers: jsonHeaders,
+        body: jsonEncode(body),
+      );
+      final data = jsonDecode(resp.body);
+      if (data['ok'] == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Переслано'),
+            duration: Duration(seconds: 1),
+          ),
+        );
+      }
+    } catch (e) {
+      // тихо
+    }
+  }
+
   void _openProfile() {
     final isGroupOrChannel = widget.isGroup || widget.isChannel;
     final isDark = Theme.of(context).brightness == Brightness.dark;
