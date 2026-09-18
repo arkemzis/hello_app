@@ -41,6 +41,7 @@ const String serverUrl = 'https://$serverIp';
 
 int myUserId = 0;
 String myEmail = '';
+String myName = '';
 
 Map<String, String> get baseHeaders => {
       'Host': serverHost,
@@ -90,10 +91,12 @@ class _LoginPageState extends State<LoginPage> {
       if (data['ok'] == true) {
         myUserId = data['userId'] ?? 0;
         myEmail = email;
+        myName = '';
         if (!mounted) return;
+        // Переходим на экран ввода имени
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const UsersPage()),
+          MaterialPageRoute(builder: (_) => const NamePage()),
         );
         return;
       }
@@ -281,6 +284,157 @@ class _LoginPageState extends State<LoginPage> {
   }
 }
 
+// ============= ЭКРАН ВВОДА ИМЕНИ =============
+class NamePage extends StatefulWidget {
+  const NamePage({super.key});
+
+  @override
+  State<NamePage> createState() => _NamePageState();
+}
+
+class _NamePageState extends State<NamePage> {
+  final _nameController = TextEditingController();
+  String _message = '';
+  bool _isError = false;
+  bool _loading = false;
+
+  Future<void> _save() async {
+    final name = _nameController.text.trim();
+    if (name.isEmpty) {
+      setState(() {
+        _message = 'Введите имя';
+        _isError = true;
+      });
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _message = '';
+    });
+    try {
+      final response = await http.post(
+        Uri.parse('$serverUrl/set-name'),
+        headers: jsonHeaders,
+        body: jsonEncode({'userId': myUserId, 'name': name}),
+      );
+      final data = jsonDecode(response.body);
+      if (data['ok'] == true) {
+        myName = name;
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const UsersPage()),
+        );
+        return;
+      }
+      setState(() {
+        _message = data['message'] ?? 'Ошибка';
+        _isError = true;
+      });
+    } catch (e) {
+      setState(() {
+        _message = 'Ошибка соединения: $e';
+        _isError = true;
+      });
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF1E3C72), Color(0xFF2A5298)],
+          ),
+        ),
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Card(
+              elevation: 8,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(28),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Как вас зовут?',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1E3C72),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Это имя увидят другие пользователи',
+                      style: TextStyle(fontSize: 14, color: Colors.grey),
+                    ),
+                    const SizedBox(height: 24),
+                    TextField(
+                      controller: _nameController,
+                      decoration: InputDecoration(
+                        hintText: 'Ваше имя',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _loading ? null : _save,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF2A5298),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: _loading
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text('Сохранить', style: TextStyle(fontSize: 16)),
+                      ),
+                    ),
+                    if (_message.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      Text(
+                        _message,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: _isError ? Colors.red : Colors.green,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // ============= ЭКРАН ПОЛЬЗОВАТЕЛЕЙ =============
 class UsersPage extends StatefulWidget {
   const UsersPage({super.key});
@@ -360,7 +514,9 @@ class _UsersPageState extends State<UsersPage> {
                     final user = _users[index];
                     final isMe = user['id'] == myUserId;
                     final email = user['email'] as String;
-                    final firstLetter = email.substring(0, 1).toUpperCase();
+                    final name = (user['name'] as String?) ?? '';
+                    final displayName = name.isNotEmpty ? name : email;
+                    final firstLetter = displayName.substring(0, 1).toUpperCase();
 
                     return ListTile(
                       leading: CircleAvatar(
@@ -376,14 +532,16 @@ class _UsersPageState extends State<UsersPage> {
                         ),
                       ),
                       title: Text(
-                        email,
+                        displayName,
                         style: const TextStyle(
                           fontWeight: FontWeight.w600,
                           fontSize: 16,
                         ),
                       ),
                       subtitle: Text(
-                        isMe ? 'это вы' : 'нажмите, чтобы открыть чат',
+                        isMe
+                            ? 'это вы'
+                            : (name.isNotEmpty ? email : 'нажмите, чтобы открыть чат'),
                         style: TextStyle(
                           color: isMe ? Colors.blue : Colors.grey[600],
                           fontSize: 13,
@@ -400,7 +558,7 @@ class _UsersPageState extends State<UsersPage> {
                           MaterialPageRoute(
                             builder: (_) => ChatPage(
                               userId: user['id'],
-                              userEmail: email,
+                              userEmail: displayName,
                               myId: myUserId,
                             ),
                           ),
@@ -563,7 +721,6 @@ class _ChatPageState extends State<ChatPage> {
           SnackBar(content: Text(data['message'] ?? 'Неизвестная ошибка')),
         );
       } else {
-        // Показываем сообщение сразу — не ждём WebSocket
         final newId = data['id'];
         final newCreated = data['created_at'];
         setState(() {
