@@ -19,7 +19,6 @@ void main() {
   runApp(const MyApp());
 }
 
-// Глобальный переключатель темы
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.light);
 
 class MyApp extends StatelessWidget {
@@ -92,7 +91,6 @@ const List<String> emojis = [
 
 const List<String> quickReactions = ['❤️', '👍', '😂', '🔥', '😮', '😢'];
 
-// Кнопка переключения темы
 class ThemeToggleButton extends StatelessWidget {
   const ThemeToggleButton({super.key});
 
@@ -103,8 +101,7 @@ class ThemeToggleButton extends StatelessWidget {
       icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
       tooltip: isDark ? 'Светлая тема' : 'Тёмная тема',
       onPressed: () {
-        themeNotifier.value =
-            isDark ? ThemeMode.light : ThemeMode.dark;
+        themeNotifier.value = isDark ? ThemeMode.light : ThemeMode.dark;
       },
     );
   }
@@ -251,10 +248,7 @@ class _LoginPageState extends State<LoginPage> {
                     const SizedBox(height: 8),
                     Text(
                       'Войдите, чтобы продолжить',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey[600],
-                      ),
+                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                     ),
                     const SizedBox(height: 24),
                     TextField(
@@ -494,7 +488,7 @@ class _NamePageState extends State<NamePage> {
   }
 }
 
-// ============= ЭКРАН ПОЛЬЗОВАТЕЛЕЙ =============
+// ============= ЭКРАН ПОЛЬЗОВАТЕЛЕЙ С ПОИСКОМ =============
 class UsersPage extends StatefulWidget {
   const UsersPage({super.key});
 
@@ -504,9 +498,12 @@ class UsersPage extends StatefulWidget {
 
 class _UsersPageState extends State<UsersPage> {
   List<dynamic> _users = [];
+  List<dynamic> _filteredUsers = [];
   bool _loading = true;
   String _error = '';
   Timer? _refreshTimer;
+  final _searchController = TextEditingController();
+  bool _searchVisible = false;
 
   @override
   void initState() {
@@ -516,12 +513,30 @@ class _UsersPageState extends State<UsersPage> {
       const Duration(seconds: 10),
       (_) => _loadUsers(silent: true),
     );
+    _searchController.addListener(_applyFilter);
   }
 
   @override
   void dispose() {
     _refreshTimer?.cancel();
+    _searchController.removeListener(_applyFilter);
+    _searchController.dispose();
     super.dispose();
+  }
+
+  void _applyFilter() {
+    final q = _searchController.text.trim().toLowerCase();
+    setState(() {
+      if (q.isEmpty) {
+        _filteredUsers = List.from(_users);
+      } else {
+        _filteredUsers = _users.where((u) {
+          final email = (u['email'] as String? ?? '').toLowerCase();
+          final name = (u['name'] as String? ?? '').toLowerCase();
+          return email.contains(q) || name.contains(q);
+        }).toList();
+      }
+    });
   }
 
   Future<void> _loadUsers({bool silent = false}) async {
@@ -542,6 +557,7 @@ class _UsersPageState extends State<UsersPage> {
           _users = data;
           _loading = false;
         });
+        _applyFilter();
       }
     } catch (e) {
       if (!silent && mounted) {
@@ -567,12 +583,36 @@ class _UsersPageState extends State<UsersPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Чаты'),
+        title: _searchVisible
+            ? TextField(
+                controller: _searchController,
+                autofocus: true,
+                style: const TextStyle(color: Colors.white, fontSize: 16),
+                cursorColor: Colors.white,
+                decoration: const InputDecoration(
+                  hintText: 'Поиск по имени или email...',
+                  hintStyle: TextStyle(color: Colors.white70),
+                  border: InputBorder.none,
+                ),
+              )
+            : const Text('Чаты'),
         backgroundColor: const Color(0xFF2A5298),
         foregroundColor: Colors.white,
         actions: [
+          IconButton(
+            icon: Icon(_searchVisible ? Icons.close : Icons.search),
+            onPressed: () {
+              setState(() {
+                _searchVisible = !_searchVisible;
+                if (!_searchVisible) {
+                  _searchController.clear();
+                }
+              });
+            },
+          ),
           const ThemeToggleButton(),
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -583,95 +623,131 @@ class _UsersPageState extends State<UsersPage> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error.isNotEmpty
-              ? Center(child: Text(_error, style: const TextStyle(color: Colors.red)))
-              : ListView.separated(
-                  itemCount: _users.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1, indent: 80),
-                  itemBuilder: (context, index) {
-                    final user = _users[index];
-                    final isMe = user['id'] == myUserId;
-                    final email = user['email'] as String;
-                    final name = (user['name'] as String?) ?? '';
-                    final online = user['online'] == true;
-                    final displayName = name.isNotEmpty ? name : email;
-                    final firstLetter = displayName.substring(0, 1).toUpperCase();
-
-                    return ListTile(
-                      leading: Stack(
+              ? Center(
+                  child: Text(
+                    _error,
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                )
+              : _filteredUsers.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          CircleAvatar(
-                            radius: 26,
-                            backgroundColor: _avatarColor(email),
-                            child: Text(
-                              firstLetter,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 20,
-                              ),
+                          Icon(
+                            Icons.search_off,
+                            size: 60,
+                            color: isDark ? Colors.white38 : Colors.grey[400],
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            _searchController.text.isEmpty
+                                ? 'Нет пользователей'
+                                : 'Ничего не найдено',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: isDark
+                                  ? Colors.white70
+                                  : Colors.grey[600],
                             ),
                           ),
-                          if (online && !isMe)
-                            Positioned(
-                              right: 0,
-                              bottom: 0,
-                              child: Container(
-                                width: 14,
-                                height: 14,
-                                decoration: BoxDecoration(
-                                  color: Colors.green,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: Theme.of(context).scaffoldBackgroundColor,
-                                    width: 2,
+                        ],
+                      ),
+                    )
+                  : ListView.separated(
+                      itemCount: _filteredUsers.length,
+                      separatorBuilder: (_, __) =>
+                          const Divider(height: 1, indent: 80),
+                      itemBuilder: (context, index) {
+                        final user = _filteredUsers[index];
+                        final isMe = user['id'] == myUserId;
+                        final email = user['email'] as String;
+                        final name = (user['name'] as String?) ?? '';
+                        final online = user['online'] == true;
+                        final displayName =
+                            name.isNotEmpty ? name : email;
+                        final firstLetter =
+                            displayName.substring(0, 1).toUpperCase();
+
+                        return ListTile(
+                          leading: Stack(
+                            children: [
+                              CircleAvatar(
+                                radius: 26,
+                                backgroundColor: _avatarColor(email),
+                                child: Text(
+                                  firstLetter,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 20,
                                   ),
                                 ),
                               ),
-                            ),
-                        ],
-                      ),
-                      title: Text(
-                        displayName,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 16,
-                        ),
-                      ),
-                      subtitle: Text(
-                        isMe
-                            ? 'это вы'
-                            : online
-                                ? 'онлайн'
-                                : (name.isNotEmpty ? email : 'нажмите, чтобы открыть чат'),
-                        style: TextStyle(
-                          color: isMe
-                              ? Colors.blue
-                              : online
-                                  ? Colors.green
-                                  : Colors.grey[600],
-                          fontSize: 13,
-                        ),
-                      ),
-                      trailing: const Icon(
-                        Icons.chevron_right,
-                        color: Colors.grey,
-                      ),
-                      onTap: () {
-                        if (isMe) return;
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => ChatPage(
-                              userId: user['id'],
-                              userEmail: displayName,
-                              myId: myUserId,
+                              if (online && !isMe)
+                                Positioned(
+                                  right: 0,
+                                  bottom: 0,
+                                  child: Container(
+                                    width: 14,
+                                    height: 14,
+                                    decoration: BoxDecoration(
+                                      color: Colors.green,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: Theme.of(context)
+                                            .scaffoldBackgroundColor,
+                                        width: 2,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          title: Text(
+                            displayName,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 16,
                             ),
                           ),
+                          subtitle: Text(
+                            isMe
+                                ? 'это вы'
+                                : online
+                                    ? 'онлайн'
+                                    : (name.isNotEmpty
+                                        ? email
+                                        : 'нажмите, чтобы открыть чат'),
+                            style: TextStyle(
+                              color: isMe
+                                  ? Colors.blue
+                                  : online
+                                      ? Colors.green
+                                      : Colors.grey[600],
+                              fontSize: 13,
+                            ),
+                          ),
+                          trailing: const Icon(
+                            Icons.chevron_right,
+                            color: Colors.grey,
+                          ),
+                          onTap: () {
+                            if (isMe) return;
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => ChatPage(
+                                  userId: user['id'],
+                                  userEmail: displayName,
+                                  myId: myUserId,
+                                ),
+                              ),
+                            );
+                          },
                         );
                       },
-                    );
-                  },
-                ),
+                    ),
     );
   }
 }
@@ -969,7 +1045,8 @@ class _ChatPageState extends State<ChatPage> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                padding:
+                    const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: quickReactions.map((emoji) {
@@ -1366,7 +1443,8 @@ class _ChatPageState extends State<ChatPage> {
                                                 ),
                                                 const SizedBox(height: 2),
                                                 Row(
-                                                  mainAxisSize: MainAxisSize.min,
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
                                                   children: [
                                                     Text(
                                                       _formatTime(
@@ -1379,7 +1457,8 @@ class _ChatPageState extends State<ChatPage> {
                                                                     .white70
                                                                 : Colors
                                                                     .grey[600])
-                                                            : Colors.grey[600],
+                                                            : Colors
+                                                                .grey[600],
                                                       ),
                                                     ),
                                                     if (isMe) ...[
