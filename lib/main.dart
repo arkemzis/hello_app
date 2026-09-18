@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:image_picker/image_picker.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:async';
-
 class MyHttpOverrides extends HttpOverrides {
   @override
   HttpClient createHttpClient(SecurityContext? context) {
@@ -109,7 +109,6 @@ class ThemeToggleButton extends StatelessWidget {
   }
 }
 
-// Виджет аватарки — фото или буква
 class AvatarWidget extends StatelessWidget {
   final String avatarUrl;
   final String displayName;
@@ -117,6 +116,7 @@ class AvatarWidget extends StatelessWidget {
   final double radius;
   final bool online;
   final bool showOnline;
+  final bool showStoryRing;
 
   const AvatarWidget({
     super.key,
@@ -126,6 +126,7 @@ class AvatarWidget extends StatelessWidget {
     this.radius = 26,
     this.online = false,
     this.showOnline = false,
+    this.showStoryRing = false,
   });
 
   Color _avatarColor(String email) {
@@ -147,57 +148,58 @@ class AvatarWidget extends StatelessWidget {
         ? displayName.substring(0, 1).toUpperCase()
         : '?';
 
-    return Stack(
-      children: [
-        ClipOval(
-          child: SizedBox(
-            width: radius * 2,
-            height: radius * 2,
-            child: hasAvatar
-                ? Image.network(
-                    '$serverUrl$avatarUrl',
-                    headers: {'Host': serverHost},
-                    fit: BoxFit.cover,
-                    loadingBuilder: (context, child, progress) {
-                      if (progress == null) return child;
-                      return Container(
-                        color: _avatarColor(email),
-                        alignment: Alignment.center,
-                        child: const CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
-                        ),
-                      );
-                    },
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        color: _avatarColor(email),
-                        alignment: Alignment.center,
-                        child: Text(
-                          firstLetter,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: radius * 0.77,
-                          ),
-                        ),
-                      );
-                    },
-                  )
-                : Container(
-                    color: _avatarColor(email),
-                    alignment: Alignment.center,
-                    child: Text(
-                      firstLetter,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: radius * 0.77,
-                      ),
-                    ),
-                  ),
+    Widget avatarContent = Container(
+      width: radius * 2,
+      height: radius * 2,
+      decoration: BoxDecoration(
+        color: _avatarColor(email),
+        shape: BoxShape.circle,
+        image: hasAvatar
+            ? DecorationImage(
+                image: NetworkImage(
+                  '$serverUrl$avatarUrl',
+                  headers: {'Host': serverHost},
+                ),
+                fit: BoxFit.cover,
+              )
+            : null,
+      ),
+      alignment: Alignment.center,
+      child: hasAvatar
+          ? null
+          : Text(
+              firstLetter,
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: radius * 0.77,
+              ),
+            ),
+    );
+
+    if (showStoryRing) {
+      avatarContent = Container(
+        padding: const EdgeInsets.all(3),
+        decoration: const BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: LinearGradient(
+            colors: [Color(0xFFF58529), Color(0xFFDD2A7B), Color(0xFF8134AF)],
           ),
         ),
+        child: Container(
+          padding: const EdgeInsets.all(2),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Theme.of(context).scaffoldBackgroundColor,
+          ),
+          child: avatarContent,
+        ),
+      );
+    }
+
+    return Stack(
+      children: [
+        avatarContent,
         if (showOnline && online)
           Positioned(
             right: 0,
@@ -216,6 +218,215 @@ class AvatarWidget extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+// ============= ЭКРАН ПРОСМОТРА СТОРИС =============
+class StoryViewerPage extends StatefulWidget {
+  final List<dynamic> stories;
+  final int initialIndex;
+  final String userName;
+  final String userAvatar;
+
+  const StoryViewerPage({
+    super.key,
+    required this.stories,
+    required this.initialIndex,
+    required this.userName,
+    required this.userAvatar,
+  });
+
+  @override
+  State<StoryViewerPage> createState() => _StoryViewerPageState();
+}
+
+class _StoryViewerPageState extends State<StoryViewerPage> {
+  late PageController _pageController;
+  late int _currentIndex;
+  Timer? _timer;
+  double _progress = 0.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialIndex;
+    _pageController = PageController(initialPage: _currentIndex);
+    _startTimer();
+  }
+
+  void _startTimer() {
+    _timer?.cancel();
+    _progress = 0.0;
+    _timer = Timer.periodic(const Duration(milliseconds: 50), (timer) {
+      if (!mounted) return;
+      setState(() {
+        _progress += 0.05 / 100; // 5 секунд
+        if (_progress >= 1.0) {
+          _progress = 0.0;
+          _nextStory();
+        }
+      });
+    });
+  }
+
+  void _nextStory() {
+    if (_currentIndex < widget.stories.length - 1) {
+      setState(() {
+        _currentIndex++;
+        _pageController.jumpToPage(_currentIndex);
+      });
+      _startTimer();
+    } else {
+      Navigator.pop(context);
+    }
+  }
+
+  void _prevStory() {
+    if (_currentIndex > 0) {
+      setState(() {
+        _currentIndex--;
+        _pageController.jumpToPage(_currentIndex);
+      });
+      _startTimer();
+    } else {
+      Navigator.pop(context);
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final story = widget.stories[_currentIndex];
+    final imageUrl = story['image_url'] as String;
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: Stack(
+          children: [
+            // Картинка
+            Positioned.fill(
+              child: Image.network(
+                '$serverUrl$imageUrl',
+                headers: {'Host': serverHost},
+                fit: BoxFit.contain,
+                loadingBuilder: (context, child, progress) {
+                  if (progress == null) return child;
+                  return const Center(
+                    child: CircularProgressIndicator(color: Colors.white),
+                  );
+                },
+                errorBuilder: (context, error, stackTrace) {
+                  return const Center(
+                    child: Icon(
+                      Icons.broken_image,
+                      color: Colors.white,
+                      size: 80,
+                    ),
+                  );
+                },
+              ),
+            ),
+
+            // Зоны нажатия: назад/вперёд
+            Positioned.fill(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: _prevStory,
+                      behavior: HitTestBehavior.opaque,
+                      child: const SizedBox.expand(),
+                    ),
+                  ),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: _nextStory,
+                      behavior: HitTestBehavior.opaque,
+                      child: const SizedBox.expand(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Прогресс-бар сверху
+            Positioned(
+              top: 8,
+              left: 8,
+              right: 8,
+              child: Row(
+                children: List.generate(widget.stories.length, (i) {
+                  return Expanded(
+                    child: Container(
+                      height: 3,
+                      margin: const EdgeInsets.symmetric(horizontal: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.white24,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                      child: FractionallySizedBox(
+                        alignment: Alignment.centerLeft,
+                        widthFactor: i < _currentIndex
+                            ? 1.0
+                            : i == _currentIndex
+                                ? _progress
+                                : 0.0,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            ),
+
+            // Шапка с именем и аватаркой
+            Positioned(
+              top: 24,
+              left: 12,
+              right: 12,
+              child: Row(
+                children: [
+                  AvatarWidget(
+                    avatarUrl: widget.userAvatar,
+                    displayName: widget.userName,
+                    email: widget.userName,
+                    radius: 18,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      widget.userName,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -470,14 +681,18 @@ class _NamePageState extends State<NamePage> {
   String _avatarUrl = '';
 
   Future<void> _pickAvatar() async {
+    if (_uploading) return;
     try {
+      setState(() => _uploading = true);
       final XFile? picked = await _picker.pickImage(
         source: ImageSource.gallery,
         imageQuality: 80,
+        requestFullMetadata: false,
       );
-      if (picked == null) return;
-
-      setState(() => _uploading = true);
+      if (picked == null) {
+        if (mounted) setState(() => _uploading = false);
+        return;
+      }
 
       final uri = Uri.parse('$serverUrl/upload');
       final request = http.MultipartRequest('POST', uri);
@@ -497,6 +712,10 @@ class _NamePageState extends State<NamePage> {
           });
         }
       }
+    } on PlatformException catch (e) {
+      if (mounted) setState(() => _uploading = false);
+      print('Picker error: ${e.code}');
+      return;
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -521,7 +740,6 @@ class _NamePageState extends State<NamePage> {
       _message = '';
     });
     try {
-      // Сохраняем имя
       final response = await http.post(
         Uri.parse('$serverUrl/set-name'),
         headers: jsonHeaders,
@@ -537,7 +755,6 @@ class _NamePageState extends State<NamePage> {
       }
       myName = name;
 
-      // Сохраняем аватарку, если загружена
       if (_avatarUrl.isNotEmpty) {
         final avatarResponse = await http.post(
           Uri.parse('$serverUrl/set-avatar'),
@@ -567,7 +784,6 @@ class _NamePageState extends State<NamePage> {
 
   @override
   Widget build(BuildContext context) {
-    final displayName = _nameController.text.trim();
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -600,11 +816,10 @@ class _NamePageState extends State<NamePage> {
                     ),
                     const SizedBox(height: 20),
 
-                    // Аватарка
                     GestureDetector(
                       onTap: _uploading ? null : _pickAvatar,
                       child: Stack(
-                                                children: [
+                        children: [
                           ClipOval(
                             child: SizedBox(
                               width: 120,
@@ -694,7 +909,6 @@ class _NamePageState extends State<NamePage> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                       ),
-                      onChanged: (_) => setState(() {}),
                     ),
                     const SizedBox(height: 16),
                     SizedBox(
@@ -753,6 +967,7 @@ class UsersPage extends StatefulWidget {
 class _UsersPageState extends State<UsersPage> {
   List<dynamic> _users = [];
   List<dynamic> _filteredUsers = [];
+  List<dynamic> _stories = [];
   bool _loading = true;
   String _error = '';
   Timer? _refreshTimer;
@@ -763,9 +978,13 @@ class _UsersPageState extends State<UsersPage> {
   void initState() {
     super.initState();
     _loadUsers();
+    _loadStories();
     _refreshTimer = Timer.periodic(
       const Duration(seconds: 10),
-      (_) => _loadUsers(silent: true),
+      (_) {
+        _loadUsers(silent: true);
+        _loadStories(silent: true);
+      },
     );
     _searchController.addListener(_applyFilter);
   }
@@ -823,9 +1042,111 @@ class _UsersPageState extends State<UsersPage> {
     }
   }
 
+  Future<void> _loadStories({bool silent = false}) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$serverUrl/stories'),
+        headers: baseHeaders,
+      );
+      final data = jsonDecode(response.body);
+      if (data['ok'] == true && mounted) {
+        setState(() {
+          _stories = data['stories'];
+        });
+      }
+    } catch (e) {}
+  }
+
+  Future<void> _addStory() async {
+    final ImagePicker picker = ImagePicker();
+    try {
+      final XFile? picked = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 80,
+        requestFullMetadata: false,
+      );
+      if (picked == null) return;
+
+      final uri = Uri.parse('$serverUrl/upload');
+      final request = http.MultipartRequest('POST', uri);
+      request.headers['Host'] = serverHost;
+      request.files.add(await http.MultipartFile.fromPath('image', picked.path));
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode != 200) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Не удалось загрузить')),
+        );
+        return;
+      }
+
+      final data = jsonDecode(response.body);
+      if (data['ok'] == true && data['imageUrl'] != null) {
+        await http.post(
+          Uri.parse('$serverUrl/add-story'),
+          headers: jsonHeaders,
+          body: jsonEncode({
+            'userId': myUserId,
+            'imageUrl': data['imageUrl'],
+          }),
+        );
+        _loadStories();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Сторис добавлена!')),
+        );
+      }
+    } on PlatformException catch (e) {
+      print('Picker error: ${e.code}');
+      return;
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка: $e')),
+      );
+    }
+  }
+
+  // Группировка сторис по пользователю
+  Map<int, List<dynamic>> _groupStories() {
+    final map = <int, List<dynamic>>{};
+    for (final s in _stories) {
+      final uid = s['user_id'] as int;
+      map.putIfAbsent(uid, () => []);
+      map[uid]!.add(s);
+    }
+    return map;
+  }
+
+  void _openStories(int userId, int initialIndex) {
+    final grouped = _groupStories();
+    final userStories = grouped[userId] ?? [];
+    if (userStories.isEmpty) return;
+
+    final user = userStories.first;
+    final name = (user['name'] as String?) ?? (user['email'] as String);
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => StoryViewerPage(
+          stories: userStories,
+          initialIndex: initialIndex,
+          userName: name,
+          userAvatar: (user['avatar_url'] as String?) ?? '',
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final grouped = _groupStories();
+
     return Scaffold(
       appBar: AppBar(
         title: _searchVisible
@@ -835,7 +1156,7 @@ class _UsersPageState extends State<UsersPage> {
                 style: const TextStyle(color: Colors.white, fontSize: 16),
                 cursorColor: Colors.white,
                 decoration: const InputDecoration(
-                  hintText: 'Поиск по имени или email...',
+                  hintText: 'Поиск...',
                   hintStyle: TextStyle(color: Colors.white70),
                   border: InputBorder.none,
                 ),
@@ -849,16 +1170,17 @@ class _UsersPageState extends State<UsersPage> {
             onPressed: () {
               setState(() {
                 _searchVisible = !_searchVisible;
-                if (!_searchVisible) {
-                  _searchController.clear();
-                }
+                if (!_searchVisible) _searchController.clear();
               });
             },
           ),
           const ThemeToggleButton(),
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _loadUsers,
+            onPressed: () {
+              _loadUsers();
+              _loadStories();
+            },
           ),
         ],
       ),
@@ -871,99 +1193,235 @@ class _UsersPageState extends State<UsersPage> {
                     style: const TextStyle(color: Colors.red),
                   ),
                 )
-              : _filteredUsers.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.search_off,
-                            size: 60,
-                            color: isDark ? Colors.white38 : Colors.grey[400],
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            _searchController.text.isEmpty
-                                ? 'Нет пользователей'
-                                : 'Ничего не найдено',
-                            style: TextStyle(
-                              fontSize: 16,
+              : Column(
+                  children: [
+                    // ============ СТОРИС ============
+                    if (!_searchVisible)
+                      Container(
+                        height: 110,
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? const Color(0xFF1F1F1F)
+                              : Colors.white,
+                          border: Border(
+                            bottom: BorderSide(
                               color: isDark
-                                  ? Colors.white70
-                                  : Colors.grey[600],
+                                  ? Colors.white12
+                                  : Colors.grey.shade300,
                             ),
                           ),
-                        ],
-                      ),
-                    )
-                  : ListView.separated(
-                      itemCount: _filteredUsers.length,
-                      separatorBuilder: (_, __) =>
-                          const Divider(height: 1, indent: 80),
-                      itemBuilder: (context, index) {
-                        final user = _filteredUsers[index];
-                        final isMe = user['id'] == myUserId;
-                        final email = user['email'] as String;
-                        final name = (user['name'] as String?) ?? '';
-                        final avatar = (user['avatar_url'] as String?) ?? '';
-                        final online = user['online'] == true;
-                        final displayName =
-                            name.isNotEmpty ? name : email;
+                        ),
+                        child: ListView(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          children: [
+                                                      // Кружок "Моя сторис"
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 8,
+                              ),
+                              child: Column(
+                                children: [
+                                  Stack(
+                                    children: [
+                                      // Аватарка — тап открывает просмотр (если есть)
+                                      GestureDetector(
+                                        onTap: () {
+                                          if (grouped.containsKey(myUserId)) {
+                                            _openStories(myUserId, 0);
+                                          } else {
+                                            _addStory();
+                                          }
+                                        },
+                                        child: AvatarWidget(
+                                          avatarUrl: myAvatarUrl,
+                                          displayName:
+                                              myName.isNotEmpty ? myName : 'Я',
+                                          email: myEmail,
+                                          radius: 32,
+                                          showStoryRing:
+                                              grouped.containsKey(myUserId),
+                                        ),
+                                      ),
+                                      // Плюс — всегда добавляет
+                                      Positioned(
+                                        right: 0,
+                                        bottom: 0,
+                                        child: GestureDetector(
+                                          onTap: _addStory,
+                                          child: Container(
+                                            width: 22,
+                                            height: 22,
+                                            decoration: const BoxDecoration(
+                                              color: Color(0xFF2A9D5C),
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: const Icon(
+                                              Icons.add,
+                                              size: 16,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Моя',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: isDark
+                                          ? Colors.white70
+                                          : Colors.black87,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
 
-                        return ListTile(
-                          leading: AvatarWidget(
-                            avatarUrl: avatar,
-                            displayName: displayName,
-                            email: email,
-                            radius: 26,
-                            online: online,
-                            showOnline: !isMe,
-                          ),
-                          title: Text(
-                            displayName,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 16,
-                            ),
-                          ),
-                          subtitle: Text(
-                            isMe
-                                ? 'это вы'
-                                : online
-                                    ? 'онлайн'
-                                    : (name.isNotEmpty
-                                        ? email
-                                        : 'нажмите, чтобы открыть чат'),
-                            style: TextStyle(
-                              color: isMe
-                                  ? Colors.blue
-                                  : online
-                                      ? Colors.green
+                            // Сторис других
+                            ...grouped.entries.where((e) => e.key != myUserId).map((entry) {
+                              final uid = entry.key;
+                              final userStories = entry.value;
+                              final firstStory = userStories.first;
+                              final name = (firstStory['name'] as String?) ??
+                                  (firstStory['email'] as String);
+                              final avatar =
+                                  (firstStory['avatar_url'] as String?) ?? '';
+                              final shortName = name.split('@')[0];
+
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 8,
+                                ),
+                                child: GestureDetector(
+                                  onTap: () => _openStories(uid, 0),
+                                  child: Column(
+                                    children: [
+                                      AvatarWidget(
+                                        avatarUrl: avatar,
+                                        displayName: name,
+                                        email: firstStory['email'],
+                                        radius: 32,
+                                        showStoryRing: true,
+                                      ),
+                                      const SizedBox(height: 4),
+                                      SizedBox(
+                                        width: 74,
+                                        child: Text(
+                                          shortName,
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: isDark
+                                                ? Colors.white70
+                                                : Colors.black87,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }),
+                          ],
+                        ),
+                      ),
+
+                    // ============ СПИСОК ЧАТОВ ============
+                    Expanded(
+                      child: _filteredUsers.isEmpty
+                          ? Center(
+                              child: Text(
+                                _searchController.text.isEmpty
+                                    ? 'Нет пользователей'
+                                    : 'Ничего не найдено',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: isDark
+                                      ? Colors.white70
                                       : Colors.grey[600],
-                              fontSize: 13,
-                            ),
-                          ),
-                          trailing: const Icon(
-                            Icons.chevron_right,
-                            color: Colors.grey,
-                          ),
-                          onTap: () {
-                            if (isMe) return;
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => ChatPage(
-                                  userId: user['id'],
-                                  userEmail: displayName,
-                                  myId: myUserId,
-                                  userAvatar: avatar,
                                 ),
                               ),
-                            );
-                          },
-                        );
-                      },
+                            )
+                          : ListView.separated(
+                              itemCount: _filteredUsers.length,
+                              separatorBuilder: (_, __) =>
+                                  const Divider(height: 1, indent: 80),
+                              itemBuilder: (context, index) {
+                                final user = _filteredUsers[index];
+                                final isMe = user['id'] == myUserId;
+                                final email = user['email'] as String;
+                                final name = (user['name'] as String?) ?? '';
+                                final avatar =
+                                    (user['avatar_url'] as String?) ?? '';
+                                final online = user['online'] == true;
+                                final displayName =
+                                    name.isNotEmpty ? name : email;
+                                final hasStory = grouped.containsKey(user['id']);
+
+                                return ListTile(
+                                  leading: AvatarWidget(
+                                    avatarUrl: avatar,
+                                    displayName: displayName,
+                                    email: email,
+                                    radius: 26,
+                                    online: online,
+                                    showOnline: !isMe,
+                                    showStoryRing: hasStory,
+                                  ),
+                                  title: Text(
+                                    displayName,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                  subtitle: Text(
+                                    isMe
+                                        ? 'это вы'
+                                        : online
+                                            ? 'онлайн'
+                                            : (name.isNotEmpty
+                                                ? email
+                                                : 'нажмите, чтобы открыть чат'),
+                                    style: TextStyle(
+                                      color: isMe
+                                          ? Colors.blue
+                                          : online
+                                              ? Colors.green
+                                              : Colors.grey[600],
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                  trailing: const Icon(
+                                    Icons.chevron_right,
+                                    color: Colors.grey,
+                                  ),
+                                  onTap: () {
+                                    if (isMe) return;
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => ChatPage(
+                                          userId: user['id'],
+                                          userEmail: displayName,
+                                          myId: myUserId,
+                                          userAvatar: avatar,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                );
+                              },
+                            ),
                     ),
+                  ],
+                ),
     );
   }
 }
@@ -1209,14 +1667,18 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   Future<void> _pickAndSendImage() async {
+    if (_uploading) return;
     try {
+      setState(() => _uploading = true);
       final XFile? picked = await _picker.pickImage(
         source: ImageSource.gallery,
         imageQuality: 80,
+        requestFullMetadata: false,
       );
-      if (picked == null) return;
-
-      setState(() => _uploading = true);
+      if (picked == null) {
+        if (mounted) setState(() => _uploading = false);
+        return;
+      }
 
       final uri = Uri.parse('$serverUrl/upload');
       final request = http.MultipartRequest('POST', uri);
@@ -1239,9 +1701,6 @@ class _ChatPageState extends State<ChatPage> {
       if (data['ok'] != true || data['imageUrl'] == null) {
         if (!mounted) return;
         setState(() => _uploading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Ошибка загрузки')),
-        );
         return;
       }
 
@@ -1276,6 +1735,10 @@ class _ChatPageState extends State<ChatPage> {
         });
         _scrollToBottom();
       }
+    } on PlatformException catch (e) {
+      if (mounted) setState(() => _uploading = false);
+      print('Picker error: ${e.code}');
+      return;
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
