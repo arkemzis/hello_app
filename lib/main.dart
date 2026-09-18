@@ -49,7 +49,7 @@ class MyApp extends StatelessWidget {
             ),
             useMaterial3: true,
           ),
-          home: const LoginPage(),
+                    home: const SplashScreen(),
         );
       },
     );
@@ -3181,6 +3181,77 @@ class _SettingsPageState extends State<SettingsPage> {
             },
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ============= ЭКРАН ЗАГРУЗКИ ARKZIS =============
+class SplashScreen extends StatefulWidget {
+  const SplashScreen({super.key});
+
+  @override
+  State<SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen> {
+  @override
+  void initState() {
+    super.initState();
+    Timer(const Duration(milliseconds: 1500), () {
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginPage()),
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF5B21B6), Color(0xFF7C3AED)],
+          ),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(28),
+                child: Image.asset(
+                  'assets/icon.png',
+                  width: 120,
+                  height: 120,
+                ),
+              ),
+              const SizedBox(height: 28),
+              const Text(
+                'ARKZIS',
+                style: TextStyle(
+                  fontSize: 34,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  letterSpacing: 6,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Connect without limits',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.white70,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
