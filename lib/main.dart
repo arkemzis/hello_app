@@ -2,8 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'dart:convert';
+import 'dart:io';
+
+class MyHttpOverrides extends HttpOverrides {
+  @override
+  HttpClient createHttpClient(SecurityContext? context) {
+    return super.createHttpClient(context)
+      ..badCertificateCallback =
+          (X509Certificate cert, String host, int port) => true;
+  }
+}
 
 void main() {
+  HttpOverrides.global = MyHttpOverrides();
   runApp(const MyApp());
 }
 
@@ -24,10 +35,21 @@ class MyApp extends StatelessWidget {
   }
 }
 
-const String serverUrl = 'https://my-messenger-production-063d.up.railway.app';
+const String serverIp = '69.46.46.46';
+const String serverHost = 'my-messenger-production-063d.up.railway.app';
+const String serverUrl = 'https://$serverIp';
 
 int myUserId = 0;
 String myEmail = '';
+
+Map<String, String> get baseHeaders => {
+      'Host': serverHost,
+    };
+
+Map<String, String> get jsonHeaders => {
+      'Content-Type': 'application/json',
+      'Host': serverHost,
+    };
 
 // ============= ЭКРАН ВХОДА =============
 class LoginPage extends StatefulWidget {
@@ -61,7 +83,7 @@ class _LoginPageState extends State<LoginPage> {
     try {
       final response = await http.post(
         Uri.parse('$serverUrl/register'),
-        headers: {'Content-Type': 'application/json'},
+        headers: jsonHeaders,
         body: jsonEncode({'email': email, 'password': password}),
       );
       final data = jsonDecode(response.body);
@@ -106,7 +128,7 @@ class _LoginPageState extends State<LoginPage> {
     try {
       final response = await http.post(
         Uri.parse('$serverUrl/login'),
-        headers: {'Content-Type': 'application/json'},
+        headers: jsonHeaders,
         body: jsonEncode({'email': email, 'password': password}),
       );
       final data = jsonDecode(response.body);
@@ -284,7 +306,10 @@ class _UsersPageState extends State<UsersPage> {
       _error = '';
     });
     try {
-      final response = await http.get(Uri.parse('$serverUrl/users'));
+      final response = await http.get(
+        Uri.parse('$serverUrl/users'),
+        headers: baseHeaders,
+      );
       final data = jsonDecode(response.body) as List;
       setState(() {
         _users = data;
@@ -425,6 +450,7 @@ class _ChatPageState extends State<ChatPage> {
       serverUrl,
       IO.OptionBuilder()
           .setTransports(['websocket', 'polling'])
+          .setExtraHeaders({'Host': serverHost})
           .disableAutoConnect()
           .build(),
     );
@@ -443,14 +469,17 @@ class _ChatPageState extends State<ChatPage> {
 
       if ((from == widget.userId && to == widget.myId) ||
           (from == widget.myId && to == widget.userId)) {
+        final newId = data['id'];
         setState(() {
-          _messages.add({
-            'id': data['id'],
-            'from_user': from,
-            'to_user': to,
-            'text': data['text'],
-            'created_at': data['created_at'],
-          });
+          if (!_messages.any((m) => m['id'] == newId)) {
+            _messages.add({
+              'id': newId,
+              'from_user': from,
+              'to_user': to,
+              'text': data['text'],
+              'created_at': data['created_at'],
+            });
+          }
         });
         _scrollToBottom();
       }
@@ -487,6 +516,7 @@ class _ChatPageState extends State<ChatPage> {
     try {
       final response = await http.get(
         Uri.parse('$serverUrl/messages?with=${widget.userId}&me=${widget.myId}'),
+        headers: baseHeaders,
       );
       final data = jsonDecode(response.body);
       if (data['ok'] == true) {
@@ -519,7 +549,7 @@ class _ChatPageState extends State<ChatPage> {
     try {
       final response = await http.post(
         Uri.parse('$serverUrl/send'),
-        headers: {'Content-Type': 'application/json'},
+        headers: jsonHeaders,
         body: jsonEncode({
           'to': widget.userId,
           'text': text,
@@ -532,6 +562,22 @@ class _ChatPageState extends State<ChatPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(data['message'] ?? 'Неизвестная ошибка')),
         );
+      } else {
+        // Показываем сообщение сразу — не ждём WebSocket
+        final newId = data['id'];
+        final newCreated = data['created_at'];
+        setState(() {
+          if (!_messages.any((m) => m['id'] == newId)) {
+            _messages.add({
+              'id': newId,
+              'from_user': widget.myId,
+              'to_user': widget.userId,
+              'text': text,
+              'created_at': newCreated,
+            });
+          }
+        });
+        _scrollToBottom();
       }
     } catch (e) {
       if (!mounted) return;
@@ -545,6 +591,7 @@ class _ChatPageState extends State<ChatPage> {
     try {
       final response = await http.delete(
         Uri.parse('$serverUrl/messages/$id?userId=${widget.myId}'),
+        headers: baseHeaders,
       );
       final data = jsonDecode(response.body);
       if (data['ok'] != true) {
@@ -553,7 +600,6 @@ class _ChatPageState extends State<ChatPage> {
           SnackBar(content: Text(data['message'] ?? 'Не удалось удалить')),
         );
       } else {
-        // Локально тоже удалим (на случай если WebSocket отстал)
         setState(() {
           _messages.removeWhere((m) => m['id'] == id);
         });
@@ -568,7 +614,7 @@ class _ChatPageState extends State<ChatPage> {
 
   void _showMessageMenu(dynamic msg) {
     final isMe = msg['from_user'] == widget.myId;
-    if (!isMe) return; // удалять можно только свои
+    if (!isMe) return;
 
     showModalBottomSheet(
       context: context,
