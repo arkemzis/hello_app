@@ -6,7 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:async';
-
+import 'e2ee.dart';
 class MyHttpOverrides extends HttpOverrides {
   @override
   HttpClient createHttpClient(SecurityContext? context) {
@@ -880,7 +880,20 @@ class _NamePageState extends State<NamePage> {
         return;
       }
       myName = name;
-
+      // E2EE: генерируем ключи и отправляем публичный на сервер
+      try {
+        await E2EE.init();
+        final pubKey = await E2EE.getMyPublicKeyBase64();
+        if (pubKey != null) {
+          await http.post(
+            Uri.parse('$serverUrl/set-public-key'),
+            headers: jsonHeaders,
+            body: jsonEncode({'userId': myUserId, 'publicKey': pubKey}),
+          );
+        }
+      } catch (e) {
+        print('E2EE init error: $e');
+      }
       if (_avatarUrl.isNotEmpty) {
         final avatarResponse = await http.post(
           Uri.parse('$serverUrl/set-avatar'),
@@ -1381,10 +1394,14 @@ class _UsersPageState extends State<UsersPage> {
                               onTap: () {
                                 if (isMe) return;
                                 Navigator.push(context, MaterialPageRoute(
-                                  builder: (_) => ChatPage(
-                                    userId: user['id'], userEmail: displayName,
-                                    myId: myUserId, userAvatar: avatar,
-                                  ),
+                                    builder: (_) => ChatPage(
+                                      userId: user['id'],
+                                      userEmail: displayName,
+                                      myId: myUserId,
+                                      userAvatar: avatar,
+                                      userPublicKey: (user['public_key'] as String?) ?? '',
+                                    ),
+                                    
                                 ));
                               },
                             );
@@ -1405,6 +1422,7 @@ class ChatPage extends StatefulWidget {
   final String userEmail;
   final int myId;
   final String userAvatar;
+  final String userPublicKey;
   final int? chatId;
   final bool isGroup;
   final bool isChannel;
@@ -1415,11 +1433,11 @@ class ChatPage extends StatefulWidget {
     required this.userEmail,
     required this.myId,
     this.userAvatar = '',
+    this.userPublicKey = '',
     this.chatId,
     this.isGroup = false,
     this.isChannel = false,
   });
-
   @override
   State<ChatPage> createState() => _ChatPageState();
 }
@@ -1463,7 +1481,7 @@ class _ChatPageState extends State<ChatPage> {
       _socket.emit('identify', widget.myId);
     });
 
-    _socket.on('message', (data) {
+        _socket.on('message', (data) async {
       if (data == null) return;
 
       if (widget.isGroup || widget.isChannel) {
@@ -1488,24 +1506,26 @@ class _ChatPageState extends State<ChatPage> {
           });
           _scrollToBottom();
         }
-      } else {
+            } else {
         final from = data['from'];
         final to = data['to'];
         if ((from == widget.userId && to == widget.myId) ||
             (from == widget.myId && to == widget.userId)) {
           final newId = data['id'];
+          if (_messages.any((m) => m['id'] == newId)) return;
+          final newMsg = {
+            'id': newId,
+            'from_user': from,
+            'to_user': to,
+            'text': data['text'] ?? '',
+            'image_url': data['image_url'] ?? '',
+            'created_at': data['created_at'],
+            'reactions': [],
+          };
+          final disp = await _prepareMessageDisplay(newMsg);
+          newMsg['display_text'] = disp;
           setState(() {
-            if (!_messages.any((m) => m['id'] == newId)) {
-              _messages.add({
-                'id': newId,
-                'from_user': from,
-                'to_user': to,
-                'text': data['text'] ?? '',
-                'image_url': data['image_url'] ?? '',
-                'created_at': data['created_at'],
-                'reactions': [],
-              });
-            }
+            _messages.add(newMsg);
             if (from == widget.userId) _otherTyping = false;
           });
           _scrollToBottom();
@@ -1627,6 +1647,20 @@ class _ChatPageState extends State<ChatPage> {
     _socket.dispose();
     super.dispose();
   }
+  Future<String> _prepareMessageDisplay(dynamic msg) async {
+final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
+    if (text.startsWith('E2EE:') &&
+        widget.userPublicKey.isNotEmpty &&
+        !widget.isGroup &&
+        !widget.isChannel) {
+      final dec = await E2EE.decrypt(
+        text.substring(5),
+        widget.userPublicKey,
+      );
+      return dec ?? '🔒 Не удалось расшифровать';
+    }
+    return text;
+  }
 
   Future<void> _loadMessages() async {
     try {
@@ -1636,8 +1670,14 @@ class _ChatPageState extends State<ChatPage> {
       final response = await http.get(Uri.parse(url), headers: baseHeaders);
       final data = jsonDecode(response.body);
       if (data['ok'] == true) {
+        final raw = data['messages'] as List;
+        final processed = <dynamic>[];
+        for (final m in raw) {
+          m['display_text'] = await _prepareMessageDisplay(m);
+          processed.add(m);
+        }
         setState(() {
-          _messages = data['messages'];
+          _messages = processed;
           _loading = false;
           _error = '';
         });
@@ -1656,7 +1696,7 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
-  Future<void> _sendMessage() async {
+   Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
     if (text.isEmpty) return;
 
@@ -1667,11 +1707,21 @@ class _ChatPageState extends State<ChatPage> {
       _socket.emit('typing', {'to': widget.userId, 'typing': false});
     }
 
+    // Шифруем личные сообщения
+    String sendText = text;
+    if (!widget.isGroup &&
+        !widget.isChannel &&
+        widget.userPublicKey.isNotEmpty) {
+      final enc = await E2EE.encrypt(text, widget.userPublicKey);
+      if (enc != null) {
+        sendText = 'E2EE:$enc';
+      }
+    }
+
     try {
       final body = (widget.isGroup || widget.isChannel)
           ? {'chatId': widget.chatId, 'text': text, 'from': widget.myId}
-          : {'to': widget.userId, 'text': text, 'from': widget.myId};
-
+          : {'to': widget.userId, 'text': sendText, 'from': widget.myId};
       final response = await http.post(
         Uri.parse('$serverUrl/send'),
         headers: jsonHeaders,
@@ -1693,7 +1743,8 @@ class _ChatPageState extends State<ChatPage> {
               'from_user': widget.myId,
               'to_user': (widget.isGroup || widget.isChannel) ? null : widget.userId,
               'chat_id': (widget.isGroup || widget.isChannel) ? widget.chatId : null,
-              'text': text,
+              'text': sendText,
+              'display_text': text,
               'image_url': '',
               'created_at': newCreated,
               'sender_name': myName.isNotEmpty ? myName : myEmail,
@@ -2077,7 +2128,7 @@ class _ChatPageState extends State<ChatPage> {
                               final reactions = (msg['reactions'] as List?) ?? [];
                               final grouped = _groupReactions(reactions);
                               final imageUrl = (msg['image_url'] as String?) ?? '';
-                              final text = (msg['text'] as String?) ?? '';
+                              final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
 
                               String senderName = '';
                               if ((widget.isGroup || widget.isChannel) && !isMe) {
