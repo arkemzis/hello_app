@@ -1224,7 +1224,16 @@ class _UsersPageState extends State<UsersPage> {
               });
             },
           ),
-          const ThemeToggleButton(),
+                    IconButton(
+            icon: const Icon(Icons.settings),
+            tooltip: 'Настройки',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SettingsPage()),
+              );
+            },
+          ),
           IconButton(icon: const Icon(Icons.refresh), onPressed: _loadAll),
         ],
       ),
@@ -2901,6 +2910,153 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
                       ],
                     ),
                   ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ============= НАСТРОЙКИ =============
+class SettingsPage extends StatefulWidget {
+  const SettingsPage({super.key});
+
+  @override
+  State<SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<SettingsPage> {
+  void _logout() {
+    myUserId = 0;
+    myEmail = '';
+    myName = '';
+    myAvatarUrl = '';
+
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginPage()),
+      (route) => false,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF2A5298),
+        foregroundColor: Colors.white,
+        title: const Text('Настройки'),
+      ),
+      body: ListView(
+        children: [
+          const SizedBox(height: 16),
+          Center(
+            child: AvatarWidget(
+              avatarUrl: myAvatarUrl,
+              displayName: myName.isNotEmpty ? myName : myEmail,
+              email: myEmail,
+              radius: 50,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Center(
+            child: Text(
+              myName.isNotEmpty ? myName : myEmail,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: isDark ? Colors.white : Colors.black87,
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Center(
+            child: Text(
+              myEmail,
+              style: TextStyle(
+                fontSize: 14,
+                color: isDark ? Colors.white70 : Colors.grey[600],
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          const Divider(),
+
+          SwitchListTile(
+            secondary: Icon(
+              isDark ? Icons.dark_mode : Icons.light_mode,
+              color: const Color(0xFF2A5298),
+            ),
+            title: const Text('Тёмная тема'),
+            subtitle: Text(isDark ? 'Включена' : 'Выключена'),
+            value: isDark,
+            activeColor: const Color(0xFF2A5298),
+            onChanged: (v) {
+              themeNotifier.value = v ? ThemeMode.dark : ThemeMode.light;
+              setState(() {});
+            },
+          ),
+          const Divider(),
+
+          ListTile(
+            leading: const Icon(Icons.info_outline, color: Color(0xFF2A5298)),
+            title: const Text('О приложении'),
+            subtitle: const Text('Мой Мессенджер v1.0'),
+            trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+            onTap: () {
+              showDialog(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('Мой Мессенджер'),
+                  content: const Text(
+                    'Версия 1.0\n\n'
+                    'Мессенджер с E2EE-шифрованием личных сообщений.\n\n'
+                    'Группы, каналы, сторис, реакции, ответы, пересылка.',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('OK'),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+          const Divider(),
+
+          ListTile(
+            leading: const Icon(Icons.logout, color: Colors.red),
+            title: const Text('Выйти из аккаунта',
+              style: TextStyle(color: Colors.red)),
+            onTap: () {
+              showDialog(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('Выйти?'),
+                  content: const Text(
+                    'Ты выйдешь из аккаунта. Ключи E2EE останутся '
+                    'на телефоне — войдёшь обратно, они восстановятся.',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('Отмена'),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _logout();
+                      },
+                      child: const Text('Выйти',
+                        style: TextStyle(color: Colors.red)),
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
         ],
       ),
