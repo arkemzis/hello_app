@@ -62,6 +62,7 @@ const String serverUrl = 'https://$serverIp';
 int myUserId = 0;
 String myEmail = '';
 String myName = '';
+String myAvatarUrl = '';
 
 Map<String, String> get baseHeaders => {'Host': serverHost};
 Map<String, String> get jsonHeaders => {
@@ -108,6 +109,117 @@ class ThemeToggleButton extends StatelessWidget {
   }
 }
 
+// Виджет аватарки — фото или буква
+class AvatarWidget extends StatelessWidget {
+  final String avatarUrl;
+  final String displayName;
+  final String email;
+  final double radius;
+  final bool online;
+  final bool showOnline;
+
+  const AvatarWidget({
+    super.key,
+    required this.avatarUrl,
+    required this.displayName,
+    required this.email,
+    this.radius = 26,
+    this.online = false,
+    this.showOnline = false,
+  });
+
+  Color _avatarColor(String email) {
+    final colors = [
+      const Color(0xFF2A5298),
+      const Color(0xFF2A9D5C),
+      const Color(0xFFD9534F),
+      const Color(0xFF9C27B0),
+      const Color(0xFFFF9800),
+      const Color(0xFF009688),
+    ];
+    return colors[email.hashCode.abs() % colors.length];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasAvatar = avatarUrl.isNotEmpty;
+    final firstLetter = displayName.isNotEmpty
+        ? displayName.substring(0, 1).toUpperCase()
+        : '?';
+
+    return Stack(
+      children: [
+        ClipOval(
+          child: SizedBox(
+            width: radius * 2,
+            height: radius * 2,
+            child: hasAvatar
+                ? Image.network(
+                    '$serverUrl$avatarUrl',
+                    headers: {'Host': serverHost},
+                    fit: BoxFit.cover,
+                    loadingBuilder: (context, child, progress) {
+                      if (progress == null) return child;
+                      return Container(
+                        color: _avatarColor(email),
+                        alignment: Alignment.center,
+                        child: const CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      );
+                    },
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        color: _avatarColor(email),
+                        alignment: Alignment.center,
+                        child: Text(
+                          firstLetter,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: radius * 0.77,
+                          ),
+                        ),
+                      );
+                    },
+                  )
+                : Container(
+                    color: _avatarColor(email),
+                    alignment: Alignment.center,
+                    child: Text(
+                      firstLetter,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: radius * 0.77,
+                      ),
+                    ),
+                  ),
+          ),
+        ),
+        if (showOnline && online)
+          Positioned(
+            right: 0,
+            bottom: 0,
+            child: Container(
+              width: radius * 0.5,
+              height: radius * 0.5,
+              decoration: BoxDecoration(
+                color: Colors.green,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: Theme.of(context).scaffoldBackgroundColor,
+                  width: 2,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
 // ============= ЭКРАН ВХОДА =============
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -148,6 +260,7 @@ class _LoginPageState extends State<LoginPage> {
         myUserId = data['userId'] ?? 0;
         myEmail = email;
         myName = '';
+        myAvatarUrl = '';
         if (!mounted) return;
         Navigator.pushReplacement(
           context,
@@ -339,7 +452,7 @@ class _LoginPageState extends State<LoginPage> {
   }
 }
 
-// ============= ЭКРАН ИМЕНИ =============
+// ============= ЭКРАН ИМЕНИ И АВАТАРКИ =============
 class NamePage extends StatefulWidget {
   const NamePage({super.key});
 
@@ -349,9 +462,50 @@ class NamePage extends StatefulWidget {
 
 class _NamePageState extends State<NamePage> {
   final _nameController = TextEditingController();
+  final ImagePicker _picker = ImagePicker();
   String _message = '';
   bool _isError = false;
   bool _loading = false;
+  bool _uploading = false;
+  String _avatarUrl = '';
+
+  Future<void> _pickAvatar() async {
+    try {
+      final XFile? picked = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 80,
+      );
+      if (picked == null) return;
+
+      setState(() => _uploading = true);
+
+      final uri = Uri.parse('$serverUrl/upload');
+      final request = http.MultipartRequest('POST', uri);
+      request.headers['Host'] = serverHost;
+      request.files.add(await http.MultipartFile.fromPath('image', picked.path));
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['ok'] == true && data['imageUrl'] != null) {
+          setState(() {
+            _avatarUrl = data['imageUrl'];
+            _message = '';
+            _isError = false;
+          });
+        }
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка загрузки: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
 
   Future<void> _save() async {
     final name = _nameController.text.trim();
@@ -367,25 +521,40 @@ class _NamePageState extends State<NamePage> {
       _message = '';
     });
     try {
+      // Сохраняем имя
       final response = await http.post(
         Uri.parse('$serverUrl/set-name'),
         headers: jsonHeaders,
         body: jsonEncode({'userId': myUserId, 'name': name}),
       );
       final data = jsonDecode(response.body);
-      if (data['ok'] == true) {
-        myName = name;
-        if (!mounted) return;
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const UsersPage()),
-        );
+      if (data['ok'] != true) {
+        setState(() {
+          _message = data['message'] ?? 'Ошибка';
+          _isError = true;
+        });
         return;
       }
-      setState(() {
-        _message = data['message'] ?? 'Ошибка';
-        _isError = true;
-      });
+      myName = name;
+
+      // Сохраняем аватарку, если загружена
+      if (_avatarUrl.isNotEmpty) {
+        final avatarResponse = await http.post(
+          Uri.parse('$serverUrl/set-avatar'),
+          headers: jsonHeaders,
+          body: jsonEncode({'userId': myUserId, 'avatarUrl': _avatarUrl}),
+        );
+        final avatarData = jsonDecode(avatarResponse.body);
+        if (avatarData['ok'] == true) {
+          myAvatarUrl = _avatarUrl;
+        }
+      }
+
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const UsersPage()),
+      );
     } catch (e) {
       setState(() {
         _message = 'Ошибка соединения: $e';
@@ -398,6 +567,7 @@ class _NamePageState extends State<NamePage> {
 
   @override
   Widget build(BuildContext context) {
+    final displayName = _nameController.text.trim();
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -421,18 +591,100 @@ class _NamePageState extends State<NamePage> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     const Text(
-                      'Как вас зовут?',
+                      'Ваш профиль',
                       style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
                         color: Color(0xFF2A5298),
                       ),
                     ),
+                    const SizedBox(height: 20),
+
+                    // Аватарка
+                    GestureDetector(
+                      onTap: _uploading ? null : _pickAvatar,
+                      child: Stack(
+                                                children: [
+                          ClipOval(
+                            child: SizedBox(
+                              width: 120,
+                              height: 120,
+                              child: _avatarUrl.isNotEmpty
+                                  ? Image.network(
+                                      '$serverUrl$_avatarUrl',
+                                      headers: {'Host': serverHost},
+                                      fit: BoxFit.cover,
+                                      loadingBuilder:
+                                          (context, child, progress) {
+                                        if (progress == null) return child;
+                                        return Container(
+                                          color: const Color(0xFF2A5298),
+                                          alignment: Alignment.center,
+                                          child:
+                                              const CircularProgressIndicator(
+                                            color: Colors.white,
+                                          ),
+                                        );
+                                      },
+                                      errorBuilder:
+                                          (context, error, stackTrace) {
+                                        return Container(
+                                          color: const Color(0xFF2A5298),
+                                          alignment: Alignment.center,
+                                          child: const Icon(
+                                            Icons.person,
+                                            size: 60,
+                                            color: Colors.white,
+                                          ),
+                                        );
+                                      },
+                                    )
+                                  : Container(
+                                      color: const Color(0xFF2A5298),
+                                      alignment: Alignment.center,
+                                      child: const Icon(
+                                        Icons.person,
+                                        size: 60,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                            ),
+                          ),
+                          Positioned(
+                            right: 0,
+                            bottom: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFF2A9D5C),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.camera_alt,
+                                size: 20,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                          if (_uploading)
+                            const Positioned.fill(
+                              child: Center(
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
                     const SizedBox(height: 8),
                     Text(
-                      'Это имя увидят другие',
-                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                      _avatarUrl.isEmpty
+                          ? 'Нажмите, чтобы выбрать фото'
+                          : 'Нажмите, чтобы изменить',
+                      style: TextStyle(fontSize: 13, color: Colors.grey[600]),
                     ),
+
                     const SizedBox(height: 24),
                     TextField(
                       controller: _nameController,
@@ -442,6 +694,7 @@ class _NamePageState extends State<NamePage> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                       ),
+                      onChanged: (_) => setState(() {}),
                     ),
                     const SizedBox(height: 16),
                     SizedBox(
@@ -570,18 +823,6 @@ class _UsersPageState extends State<UsersPage> {
     }
   }
 
-  Color _avatarColor(String email) {
-    final colors = [
-      const Color(0xFF2A5298),
-      const Color(0xFF2A9D5C),
-      const Color(0xFFD9534F),
-      const Color(0xFF9C27B0),
-      const Color(0xFFFF9800),
-      const Color(0xFF009688),
-    ];
-    return colors[email.hashCode.abs() % colors.length];
-  }
-
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -664,46 +905,19 @@ class _UsersPageState extends State<UsersPage> {
                         final isMe = user['id'] == myUserId;
                         final email = user['email'] as String;
                         final name = (user['name'] as String?) ?? '';
+                        final avatar = (user['avatar_url'] as String?) ?? '';
                         final online = user['online'] == true;
                         final displayName =
                             name.isNotEmpty ? name : email;
-                        final firstLetter =
-                            displayName.substring(0, 1).toUpperCase();
 
                         return ListTile(
-                          leading: Stack(
-                            children: [
-                              CircleAvatar(
-                                radius: 26,
-                                backgroundColor: _avatarColor(email),
-                                child: Text(
-                                  firstLetter,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 20,
-                                  ),
-                                ),
-                              ),
-                              if (online && !isMe)
-                                Positioned(
-                                  right: 0,
-                                  bottom: 0,
-                                  child: Container(
-                                    width: 14,
-                                    height: 14,
-                                    decoration: BoxDecoration(
-                                      color: Colors.green,
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: Theme.of(context)
-                                            .scaffoldBackgroundColor,
-                                        width: 2,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                            ],
+                          leading: AvatarWidget(
+                            avatarUrl: avatar,
+                            displayName: displayName,
+                            email: email,
+                            radius: 26,
+                            online: online,
+                            showOnline: !isMe,
                           ),
                           title: Text(
                             displayName,
@@ -742,6 +956,7 @@ class _UsersPageState extends State<UsersPage> {
                                   userId: user['id'],
                                   userEmail: displayName,
                                   myId: myUserId,
+                                  userAvatar: avatar,
                                 ),
                               ),
                             );
@@ -758,12 +973,14 @@ class ChatPage extends StatefulWidget {
   final int userId;
   final String userEmail;
   final int myId;
+  final String userAvatar;
 
   const ChatPage({
     super.key,
     required this.userId,
     required this.userEmail,
     required this.myId,
+    this.userAvatar = '',
   });
 
   @override
@@ -1330,34 +1547,13 @@ class _ChatPageState extends State<ChatPage> {
         foregroundColor: Colors.white,
         title: Row(
           children: [
-            Stack(
-              children: [
-                CircleAvatar(
-                  radius: 18,
-                  backgroundColor: Colors.white24,
-                  child: Text(
-                    widget.userEmail.substring(0, 1).toUpperCase(),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                if (_otherOnline)
-                  Positioned(
-                    right: 0,
-                    bottom: 0,
-                    child: Container(
-                      width: 12,
-                      height: 12,
-                      decoration: BoxDecoration(
-                        color: Colors.green,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2),
-                      ),
-                    ),
-                  ),
-              ],
+            AvatarWidget(
+              avatarUrl: widget.userAvatar,
+              displayName: widget.userEmail,
+              email: widget.userEmail,
+              radius: 18,
+              online: _otherOnline,
+              showOnline: true,
             ),
             const SizedBox(width: 12),
             Expanded(
