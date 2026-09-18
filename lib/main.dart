@@ -2734,10 +2734,26 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
                                       _react(msg['id'], '❤️');
                                     },
                                     onHorizontalDragEnd: (details) {
-                                      if (details.primaryVelocity != null &&
-                                          details.primaryVelocity! > 400) {
+                                      if (details.primaryVelocity == null) return;
+                                      final v = details.primaryVelocity!;
+                                      if (v > 400) {
+                                        // Свайп вправо → ответить
                                         HapticFeedback.mediumImpact();
                                         setState(() => _replyingTo = msg);
+                                      } else if (v < -400) {
+                                        // Свайп влево → удалить (только свои)
+                                        if (!isMe) {
+                                          HapticFeedback.lightImpact();
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(
+                                              content: Text('Можно удалять только свои сообщения'),
+                                              duration: Duration(seconds: 1),
+                                            ),
+                                          );
+                                          return;
+                                        }
+                                        HapticFeedback.mediumImpact();
+                                        _deleteMessage(msg['id']);
                                       }
                                     },
                                     child: Align(
