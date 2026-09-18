@@ -2581,10 +2581,10 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final chatBg = isDark ? const Color(0xFF0E1621) : const Color(0xFFECE5DD);
+    final chatBg = isDark ? const Color(0xFF09090B) : const Color(0xFFECE5DD);
     final myBubble = isDark ? const Color(0xFF4C1D95) : const Color(0xFFE9D5FF);
     final myText = isDark ? Colors.white : Colors.black87;
-    final otherBubble = isDark ? const Color(0xFF182533) : Colors.white;
+    final otherBubble = isDark ? const Color(0xFF18181B) : Colors.white;
     final otherText = isDark ? Colors.white : Colors.black87;
     final canWrite = !widget.isChannel || _isAdmin;
 
@@ -2874,7 +2874,7 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
                                                       decoration: BoxDecoration(
                                                         color: iReacted
                                                             ? (isDark ? const Color(0xFF4C1D95) : const Color(0xFFE9D5FF))
-                                                            : (isDark ? const Color(0xFF182533) : Colors.white),
+                                                            : (isDark ? const Color(0xFF18181B) : Colors.white),
                                                         borderRadius: BorderRadius.circular(12),
                                                         border: Border.all(
                                                           color: iReacted ? const Color(0xFF7C3AED) : Colors.grey.shade400,
