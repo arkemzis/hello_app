@@ -1532,7 +1532,33 @@ class _ChatPageState extends State<ChatPage> {
         }
       }
     });
+    _socket.on('message_edited', (data) async {
+      if (data == null) return;
+      final editedId = data['id'];
+      final newText = data['newText'];
+      if (editedId == null || newText == null) return;
 
+      final idx = _messages.indexWhere((m) => m['id'] == editedId);
+      if (idx == -1) return;
+
+      final msg = _messages[idx];
+      final isFromOther = msg['from_user'] != widget.myId;
+
+      String display = newText;
+      if (isFromOther && widget.userPublicKey.isNotEmpty && !widget.isGroup && !widget.isChannel) {
+        if (newText.startsWith('E2EE:')) {
+          final dec = await E2EE.decrypt(newText.substring(5), widget.userPublicKey);
+          if (dec != null) display = dec;
+        }
+      }
+
+      setState(() {
+        msg['text'] = newText;
+        msg['display_text'] = display;
+        msg['edited'] = true;    // ← ДОБАВИЛИ: пометка «изм.»
+      });
+      _scrollToBottom();
+    });
     _socket.on('message_deleted', (data) {
       if (data == null) return;
       final deletedId = data['id'];
@@ -1869,6 +1895,81 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
     }
   }
 
+    Future<void> _editMessage(dynamic msg) async {
+    final currentDisplay = (msg['display_text'] as String?) ?? '';
+    final imageUrl = (msg['image_url'] as String?) ?? '';
+
+    if (currentDisplay.isEmpty && imageUrl.isNotEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Нельзя редактировать изображение')),
+      );
+      return;
+    }
+
+    final controller = TextEditingController(text: currentDisplay);
+    final newText = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Редактировать сообщение'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLines: null,
+          decoration: const InputDecoration(hintText: 'Новый текст'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('Сохранить'),
+          ),
+        ],
+      ),
+    );
+
+    if (newText == null || newText.isEmpty || newText == currentDisplay) return;
+
+    String sendText = newText;
+    if (!widget.isGroup && !widget.isChannel && widget.userPublicKey.isNotEmpty) {
+      final enc = await E2EE.encrypt(newText, widget.userPublicKey);
+      if (enc != null) sendText = 'E2EE:$enc';
+    }
+
+    try {
+      final resp = await http.post(
+        Uri.parse('$serverUrl/edit-message'),
+        headers: jsonHeaders,
+        body: jsonEncode({
+          'messageId': msg['id'],
+          'userId': widget.myId,
+          'newText': sendText,
+        }),
+      );
+      final data = jsonDecode(resp.body);
+      if (data['ok'] == true) {
+        setState(() {
+          msg['text'] = sendText;
+          msg['display_text'] = newText;
+          msg['edited'] = true;
+        });
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(data['message'] ?? 'Не удалось отредактировать')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка: $e')),
+      );
+    }
+  }
+
   Future<void> _react(int messageId, String emoji) async {
     try {
       await http.post(
@@ -1915,7 +2016,17 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
                   }).toList(),
                 ),
               ),
+             
               const Divider(height: 1),
+              if (isMe)
+                ListTile(
+                  leading: const Icon(Icons.edit, color: Color(0xFF2A5298)),
+                  title: const Text('Редактировать'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _editMessage(msg);
+                  },
+                ),
               if (isMe)
                 ListTile(
                   leading: const Icon(Icons.delete, color: Colors.red),
@@ -2235,7 +2346,17 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
                                                     imageUrl.isEmpty ? 0 : 4),
                                                   child: Row(
                                                     mainAxisSize: MainAxisSize.min,
-                                                    children: [
+                                                    children: [                                                      if (msg['edited'] == true) ...[
+                                                        Text('изм.',
+                                                          style: TextStyle(
+                                                            fontSize: 10,
+                                                            fontStyle: FontStyle.italic,
+                                                            color: isMe
+                                                                ? (isDark ? Colors.white70 : Colors.grey[600])
+                                                                : Colors.grey[600],
+                                                          )),
+                                                        const SizedBox(width: 4),
+                                                      ],
                                                       Text(_formatTime(msg['created_at']),
                                                         style: TextStyle(fontSize: 11,
                                                           color: isMe
