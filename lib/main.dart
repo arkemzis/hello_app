@@ -1093,7 +1093,8 @@ class _UsersPageState extends State<UsersPage> {
 
   Future<void> _loadUsers({bool silent = false}) async {
     try {
-      final response = await http.get(Uri.parse('$serverUrl/users'), headers: baseHeaders);
+            final response = await http.get(
+        Uri.parse('$serverUrl/users?me=$myUserId'), headers: baseHeaders);
       final data = jsonDecode(response.body) as List;
       if (mounted) {
         setState(() => _users = data);
@@ -1115,7 +1116,7 @@ class _UsersPageState extends State<UsersPage> {
   Future<void> _loadGroups() async {
     try {
       final response = await http.get(
-        Uri.parse('$serverUrl/my-chats?userId=$myUserId'), headers: baseHeaders);
+        Uri.parse('$serverUrl/my-chats?userId=$myUserId&me=$myUserId'), headers: baseHeaders);
       final data = jsonDecode(response.body);
       if (data['ok'] == true && mounted) setState(() => _groups = data['chats']);
     } catch (e) {}
@@ -1355,7 +1356,30 @@ class _UsersPageState extends State<UsersPage> {
                                   isChannel ? '$membersCount подписчик(ов)' : '$membersCount участник(ов)',
                                   style: TextStyle(fontSize: 13, color: Colors.grey[600]),
                                 ),
-                                trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+                                                               trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                                                        if ((int.tryParse(chat['unread_count']?.toString() ?? '0') ?? 0) > 0)
+                                      Container(
+                                        margin: const EdgeInsets.only(right: 6),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF2A5298),
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        child: Text(
+                                          '${chat['unread_count']}',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    const Icon(Icons.chevron_right, color: Colors.grey),
+                                  ],
+                                ),
                                 onTap: () {
                                   Navigator.push(context, MaterialPageRoute(
                                     builder: (_) => ChatPage(
@@ -1389,8 +1413,11 @@ class _UsersPageState extends State<UsersPage> {
                                 avatarUrl: avatar, displayName: displayName, email: email,
                                 radius: 26, online: online, showOnline: !isMe, showStoryRing: hasStory,
                               ),
-                              title: Text(displayName, style: const TextStyle(
-                                fontWeight: FontWeight.w600, fontSize: 16)),
+                                                            title: Text(displayName, style: TextStyle(
+                                fontWeight: (int.tryParse(user['unread_count']?.toString() ?? '0') ?? 0) > 0
+                                    ? FontWeight.bold
+                                    : FontWeight.w600,
+                                fontSize: 16)),
                               subtitle: Text(
                                 isMe ? 'это вы'
                                   : online ? 'онлайн'
@@ -1399,7 +1426,30 @@ class _UsersPageState extends State<UsersPage> {
                                   color: isMe ? Colors.blue : online ? Colors.green : Colors.grey[600],
                                   fontSize: 13),
                               ),
-                              trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+                                                                                          trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if ((int.tryParse(user['unread_count']?.toString() ?? '0') ?? 0) > 0)
+                                    Container(
+                                      margin: const EdgeInsets.only(right: 6),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF2A5298),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Text(
+                                        '${user['unread_count']}',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  const Icon(Icons.chevron_right, color: Colors.grey),
+                                ],
+                              ),
                               onTap: () {
                                 if (isMe) return;
                                 Navigator.push(context, MaterialPageRoute(
