@@ -24,7 +24,7 @@ class MyApp extends StatelessWidget {
   }
 }
 
-const String serverUrl = 'https://my-messenger.relaxdev.ru';
+const String serverUrl = 'https://my-messenger-production-063d.up.railway.app';
 
 int myUserId = 0;
 String myEmail = '';
@@ -388,7 +388,7 @@ class _UsersPageState extends State<UsersPage> {
   }
 }
 
-// ============= ЭКРАН ЧАТА (красивый) =============
+// ============= ЭКРАН ЧАТА =============
 class ChatPage extends StatefulWidget {
   final int userId;
   final String userEmail;
@@ -445,6 +445,7 @@ class _ChatPageState extends State<ChatPage> {
           (from == widget.myId && to == widget.userId)) {
         setState(() {
           _messages.add({
+            'id': data['id'],
             'from_user': from,
             'to_user': to,
             'text': data['text'],
@@ -453,6 +454,16 @@ class _ChatPageState extends State<ChatPage> {
         });
         _scrollToBottom();
       }
+    });
+
+    _socket.on('message_deleted', (data) {
+      if (data == null) return;
+      final deletedId = data['id'];
+      if (deletedId == null) return;
+
+      setState(() {
+        _messages.removeWhere((m) => m['id'] == deletedId);
+      });
     });
 
     _socket.onDisconnect((_) {
@@ -528,6 +539,68 @@ class _ChatPageState extends State<ChatPage> {
         SnackBar(content: Text('Ошибка отправки: $e')),
       );
     }
+  }
+
+  Future<void> _deleteMessage(int id) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$serverUrl/messages/$id?userId=${widget.myId}'),
+      );
+      final data = jsonDecode(response.body);
+      if (data['ok'] != true) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(data['message'] ?? 'Не удалось удалить')),
+        );
+      } else {
+        // Локально тоже удалим (на случай если WebSocket отстал)
+        setState(() {
+          _messages.removeWhere((m) => m['id'] == id);
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка удаления: $e')),
+      );
+    }
+  }
+
+  void _showMessageMenu(dynamic msg) {
+    final isMe = msg['from_user'] == widget.myId;
+    if (!isMe) return; // удалять можно только свои
+
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.delete, color: Colors.red),
+                title: const Text(
+                  'Удалить сообщение',
+                  style: TextStyle(color: Colors.red),
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  final id = msg['id'];
+                  if (id != null) {
+                    _deleteMessage(id);
+                  }
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.close),
+                title: const Text('Отмена'),
+                onTap: () => Navigator.pop(ctx),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   void _scrollToBottom() {
@@ -678,80 +751,83 @@ class _ChatPageState extends State<ChatPage> {
                                         ),
                                       ),
                                     ),
-                                  Align(
-                                    alignment: isMe
-                                        ? Alignment.centerRight
-                                        : Alignment.centerLeft,
-                                    child: Container(
-                                      margin: const EdgeInsets.symmetric(
-                                        vertical: 2,
-                                        horizontal: 4,
-                                      ),
-                                      padding: const EdgeInsets.fromLTRB(
-                                        12,
-                                        8,
-                                        12,
-                                        6,
-                                      ),
-                                      constraints: const BoxConstraints(
-                                        maxWidth: 300,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: isMe
-                                            ? const Color(0xFFDCF8C6)
-                                            : Colors.white,
-                                        borderRadius: BorderRadius.only(
-                                          topLeft: const Radius.circular(12),
-                                          topRight: const Radius.circular(12),
-                                          bottomLeft: Radius.circular(
-                                              isMe ? 12 : 4),
-                                          bottomRight: Radius.circular(
-                                              isMe ? 4 : 12),
+                                  GestureDetector(
+                                    onLongPress: () => _showMessageMenu(msg),
+                                    child: Align(
+                                      alignment: isMe
+                                          ? Alignment.centerRight
+                                          : Alignment.centerLeft,
+                                      child: Container(
+                                        margin: const EdgeInsets.symmetric(
+                                          vertical: 2,
+                                          horizontal: 4,
                                         ),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: Colors.black
-                                                .withOpacity(0.06),
-                                            blurRadius: 2,
-                                            offset: const Offset(0, 1),
+                                        padding: const EdgeInsets.fromLTRB(
+                                          12,
+                                          8,
+                                          12,
+                                          6,
+                                        ),
+                                        constraints: const BoxConstraints(
+                                          maxWidth: 300,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: isMe
+                                              ? const Color(0xFFDCF8C6)
+                                              : Colors.white,
+                                          borderRadius: BorderRadius.only(
+                                            topLeft: const Radius.circular(12),
+                                            topRight: const Radius.circular(12),
+                                            bottomLeft: Radius.circular(
+                                                isMe ? 12 : 4),
+                                            bottomRight: Radius.circular(
+                                                isMe ? 4 : 12),
                                           ),
-                                        ],
-                                      ),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.end,
-                                        children: [
-                                          Text(
-                                            msg['text'] ?? '',
-                                            style: const TextStyle(
-                                              color: Colors.black87,
-                                              fontSize: 15,
-                                              height: 1.3,
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black
+                                                  .withOpacity(0.06),
+                                              blurRadius: 2,
+                                              offset: const Offset(0, 1),
                                             ),
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Text(
-                                                _formatTime(
-                                                    msg['created_at']),
-                                                style: TextStyle(
-                                                  fontSize: 11,
-                                                  color: Colors.grey[600],
-                                                ),
+                                          ],
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.end,
+                                          children: [
+                                            Text(
+                                              msg['text'] ?? '',
+                                              style: const TextStyle(
+                                                color: Colors.black87,
+                                                fontSize: 15,
+                                                height: 1.3,
                                               ),
-                                              if (isMe) ...[
-                                                const SizedBox(width: 4),
-                                                Icon(
-                                                  Icons.done_all,
-                                                  size: 14,
-                                                  color: Colors.blue[600],
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  _formatTime(
+                                                      msg['created_at']),
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    color: Colors.grey[600],
+                                                  ),
                                                 ),
+                                                if (isMe) ...[
+                                                  const SizedBox(width: 4),
+                                                  Icon(
+                                                    Icons.done_all,
+                                                    size: 14,
+                                                    color: Colors.blue[600],
+                                                  ),
+                                                ],
                                               ],
-                                            ],
-                                          ),
-                                        ],
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   ),
