@@ -1511,11 +1511,13 @@ class _ChatPageState extends State<ChatPage> {
   String _error = '';
   late IO.Socket _socket;
 
-  bool _otherOnline = false;
+    bool _otherOnline = false;
   bool _otherTyping = false;
   Map<int, dynamic> _membersMap = {};
-    dynamic _replyingTo;
+  dynamic _replyingTo;
   bool _isAdmin = false;
+  bool _searchVisible = false;
+  String _searchQuery = '';
 
   @override
   void initState() {
@@ -2582,6 +2584,12 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final chatBg = isDark ? const Color(0xFF09090B) : const Color(0xFFECE5DD);
+    final filteredMessages = _searchQuery.isEmpty
+        ? _messages
+        : _messages.where((m) {
+            final t = ((m['display_text'] as String?) ?? '').toLowerCase();
+            return t.contains(_searchQuery);
+          }).toList();
     final myBubble = isDark ? const Color(0xFF4C1D95) : const Color(0xFFE9D5FF);
     final myText = isDark ? Colors.white : Colors.black87;
     final otherBubble = isDark ? const Color(0xFF18181B) : Colors.white;
@@ -2631,12 +2639,46 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
                 ],
               ),
             ),
+              if (_searchVisible)
+              IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () {
+                  setState(() {
+                    _searchVisible = false;
+                    _searchQuery = '';
+                  });
+                },
+              )
+            else
+              IconButton(
+                icon: const Icon(Icons.search),
+                onPressed: () => setState(() => _searchVisible = true),
+              ),
             const ThemeToggleButton(),
           ],
         ),
       ),
       body: Column(
         children: [
+          if (_searchVisible)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              color: isDark ? const Color(0xFF1F1F1F) : Colors.white,
+              child: TextField(
+                autofocus: true,
+                onChanged: (v) => setState(() => _searchQuery = v.trim().toLowerCase()),
+                decoration: InputDecoration(
+                  hintText: 'Поиск в чате...',
+                  prefixIcon: const Icon(Icons.search),
+                  filled: true,
+                  fillColor: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFF5F5F5),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(24),
+                    borderSide: BorderSide.none),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                ),
+              ),
+            ),
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
@@ -2649,11 +2691,13 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
                         : ListView.builder(
                             controller: _scrollController,
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-                            itemCount: _messages.length,
+                            itemCount: filteredMessages.length,
                             itemBuilder: (context, index) {
-                              final msg = _messages[index];
+                              final msg = filteredMessages[index];
                               final isMe = msg['from_user'] == widget.myId;
-                              final showDate = _shouldShowDate(index);
+                              final showDate = _searchQuery.isEmpty
+                                  ? _shouldShowDate(index)
+                                  : false;
                               final reactions = (msg['reactions'] as List?) ?? [];
                               final grouped = _groupReactions(reactions);
                               final imageUrl = (msg['image_url'] as String?) ?? '';
