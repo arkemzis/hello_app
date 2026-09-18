@@ -19,19 +19,38 @@ void main() {
   runApp(const MyApp());
 }
 
+// Глобальный переключатель темы
+final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.light);
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Мой Мессенджер',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2A5298)),
-        useMaterial3: true,
-      ),
-      home: const LoginPage(),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: themeNotifier,
+      builder: (context, mode, _) {
+        return MaterialApp(
+          title: 'Мой Мессенджер',
+          debugShowCheckedModeBanner: false,
+          themeMode: mode,
+          theme: ThemeData(
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: const Color(0xFF2A5298),
+              brightness: Brightness.light,
+            ),
+            useMaterial3: true,
+          ),
+          darkTheme: ThemeData(
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: const Color(0xFF2A5298),
+              brightness: Brightness.dark,
+            ),
+            useMaterial3: true,
+          ),
+          home: const LoginPage(),
+        );
+      },
     );
   }
 }
@@ -71,8 +90,25 @@ const List<String> emojis = [
   '☕', '🍵', '🍺', '🍻', '🥂', '🍷', '🥃', '🍸', '🍹', '🥤',
 ];
 
-// Быстрые реакции — для меню
 const List<String> quickReactions = ['❤️', '👍', '😂', '🔥', '😮', '😢'];
+
+// Кнопка переключения темы
+class ThemeToggleButton extends StatelessWidget {
+  const ThemeToggleButton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return IconButton(
+      icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
+      tooltip: isDark ? 'Светлая тема' : 'Тёмная тема',
+      onPressed: () {
+        themeNotifier.value =
+            isDark ? ThemeMode.light : ThemeMode.dark;
+      },
+    );
+  }
+}
 
 // ============= ЭКРАН ВХОДА =============
 class LoginPage extends StatefulWidget {
@@ -209,13 +245,16 @@ class _LoginPageState extends State<LoginPage> {
                       style: TextStyle(
                         fontSize: 26,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF1E3C72),
+                        color: Color(0xFF2A5298),
                       ),
                     ),
                     const SizedBox(height: 8),
-                    const Text(
+                    Text(
                       'Войдите, чтобы продолжить',
-                      style: TextStyle(fontSize: 14, color: Colors.grey),
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[600],
+                      ),
                     ),
                     const SizedBox(height: 24),
                     TextField(
@@ -391,13 +430,13 @@ class _NamePageState extends State<NamePage> {
                       style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF1E3C72),
+                        color: Color(0xFF2A5298),
                       ),
                     ),
                     const SizedBox(height: 8),
-                    const Text(
+                    Text(
                       'Это имя увидят другие',
-                      style: TextStyle(fontSize: 14, color: Colors.grey),
+                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                     ),
                     const SizedBox(height: 24),
                     TextField(
@@ -534,6 +573,7 @@ class _UsersPageState extends State<UsersPage> {
         backgroundColor: const Color(0xFF2A5298),
         foregroundColor: Colors.white,
         actions: [
+          const ThemeToggleButton(),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _loadUsers,
@@ -582,7 +622,7 @@ class _UsersPageState extends State<UsersPage> {
                                   color: Colors.green,
                                   shape: BoxShape.circle,
                                   border: Border.all(
-                                    color: Colors.white,
+                                    color: Theme.of(context).scaffoldBackgroundColor,
                                     width: 2,
                                   ),
                                 ),
@@ -722,7 +762,6 @@ class _ChatPageState extends State<ChatPage> {
       });
     });
 
-    // Обновление реакции
     _socket.on('reaction_update', (data) {
       if (data == null) return;
       final mid = data['messageId'];
@@ -919,15 +958,16 @@ class _ChatPageState extends State<ChatPage> {
   void _showMessageMenu(dynamic msg) {
     final isMe = msg['from_user'] == widget.myId;
     final messageId = msg['id'];
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     showModalBottomSheet(
       context: context,
+      backgroundColor: isDark ? const Color(0xFF1F1F1F) : Colors.white,
       builder: (ctx) {
         return SafeArea(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Быстрые реакции
               Container(
                 padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
                 child: Row(
@@ -976,9 +1016,10 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   void _showEmojiPicker() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: isDark ? const Color(0xFF1F1F1F) : Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -1105,7 +1146,6 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
-  // Группировка реакций: emoji -> [user_ids]
   Map<String, List<int>> _groupReactions(List reactions) {
     final map = <String, List<int>>{};
     for (final r in reactions) {
@@ -1120,8 +1160,16 @@ class _ChatPageState extends State<ChatPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final chatBg = isDark ? const Color(0xFF0E1621) : const Color(0xFFECE5DD);
+    final myBubble =
+        isDark ? const Color(0xFF2B5278) : const Color(0xFFDCF8C6);
+    final myText = isDark ? Colors.white : Colors.black87;
+    final otherBubble = isDark ? const Color(0xFF182533) : Colors.white;
+    final otherText = isDark ? Colors.white : Colors.black87;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFECE5DD),
+      backgroundColor: chatBg,
       appBar: AppBar(
         titleSpacing: 0,
         backgroundColor: const Color(0xFF2A5298),
@@ -1185,6 +1233,7 @@ class _ChatPageState extends State<ChatPage> {
                 ],
               ),
             ),
+            const ThemeToggleButton(),
           ],
         ),
       ),
@@ -1201,10 +1250,13 @@ class _ChatPageState extends State<ChatPage> {
                         ),
                       )
                     : _messages.isEmpty
-                        ? const Center(
+                        ? Center(
                             child: Text(
                               'Начните переписку',
-                              style: TextStyle(color: Colors.grey, fontSize: 16),
+                              style: TextStyle(
+                                color: isDark ? Colors.white70 : Colors.grey,
+                                fontSize: 16,
+                              ),
                             ),
                           )
                         : ListView.builder(
@@ -1235,7 +1287,8 @@ class _ChatPageState extends State<ChatPage> {
                                           vertical: 4,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: Colors.black.withOpacity(0.15),
+                                          color: Colors.black.withOpacity(
+                                              isDark ? 0.3 : 0.15),
                                           borderRadius:
                                               BorderRadius.circular(12),
                                         ),
@@ -1276,8 +1329,8 @@ class _ChatPageState extends State<ChatPage> {
                                             ),
                                             decoration: BoxDecoration(
                                               color: isMe
-                                                  ? const Color(0xFFDCF8C6)
-                                                  : Colors.white,
+                                                  ? myBubble
+                                                  : otherBubble,
                                               borderRadius: BorderRadius.only(
                                                 topLeft:
                                                     const Radius.circular(12),
@@ -1303,8 +1356,10 @@ class _ChatPageState extends State<ChatPage> {
                                               children: [
                                                 Text(
                                                   msg['text'] ?? '',
-                                                  style: const TextStyle(
-                                                    color: Colors.black87,
+                                                  style: TextStyle(
+                                                    color: isMe
+                                                        ? myText
+                                                        : otherText,
                                                     fontSize: 15,
                                                     height: 1.3,
                                                   ),
@@ -1318,7 +1373,13 @@ class _ChatPageState extends State<ChatPage> {
                                                           msg['created_at']),
                                                       style: TextStyle(
                                                         fontSize: 11,
-                                                        color: Colors.grey[600],
+                                                        color: isMe
+                                                            ? (isDark
+                                                                ? Colors
+                                                                    .white70
+                                                                : Colors
+                                                                    .grey[600])
+                                                            : Colors.grey[600],
                                                       ),
                                                     ),
                                                     if (isMe) ...[
@@ -1326,7 +1387,9 @@ class _ChatPageState extends State<ChatPage> {
                                                       Icon(
                                                         Icons.done_all,
                                                         size: 14,
-                                                        color: Colors.blue[600],
+                                                        color: isDark
+                                                            ? Colors.lightBlue
+                                                            : Colors.blue[600],
                                                       ),
                                                     ],
                                                   ],
@@ -1334,12 +1397,10 @@ class _ChatPageState extends State<ChatPage> {
                                               ],
                                             ),
                                           ),
-                                          // Реакции под сообщением
                                           if (grouped.isNotEmpty)
                                             Padding(
-                                              padding:
-                                                  const EdgeInsets.only(
-                                                      left: 8, right: 8),
+                                              padding: const EdgeInsets.only(
+                                                  left: 8, right: 8),
                                               child: Wrap(
                                                 spacing: 4,
                                                 children: grouped.entries
@@ -1349,8 +1410,8 @@ class _ChatPageState extends State<ChatPage> {
                                                   final iReacted = users
                                                       .contains(widget.myId);
                                                   return GestureDetector(
-                                                    onTap: () => _react(
-                                                        msg['id'], emoji),
+                                                    onTap: () =>
+                                                        _react(msg['id'], emoji),
                                                     child: Container(
                                                       padding:
                                                           const EdgeInsets
@@ -1360,9 +1421,15 @@ class _ChatPageState extends State<ChatPage> {
                                                       ),
                                                       decoration: BoxDecoration(
                                                         color: iReacted
-                                                            ? const Color(
-                                                                0xFFDCF8C6)
-                                                            : Colors.white,
+                                                            ? (isDark
+                                                                ? const Color(
+                                                                    0xFF2B5278)
+                                                                : const Color(
+                                                                    0xFFDCF8C6))
+                                                            : (isDark
+                                                                ? const Color(
+                                                                    0xFF182533)
+                                                                : Colors.white),
                                                         borderRadius:
                                                             BorderRadius
                                                                 .circular(12),
@@ -1372,7 +1439,7 @@ class _ChatPageState extends State<ChatPage> {
                                                                   0xFF2A5298)
                                                               : Colors
                                                                   .grey
-                                                                  .shade300,
+                                                                  .shade400,
                                                           width: 1,
                                                         ),
                                                       ),
@@ -1399,13 +1466,13 @@ class _ChatPageState extends State<ChatPage> {
           ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-            decoration: const BoxDecoration(
-              color: Colors.white,
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1F1F1F) : Colors.white,
               boxShadow: [
                 BoxShadow(
                   color: Colors.black12,
                   blurRadius: 4,
-                  offset: Offset(0, -1),
+                  offset: const Offset(0, -1),
                 ),
               ],
             ),
@@ -1432,7 +1499,9 @@ class _ChatPageState extends State<ChatPage> {
                     decoration: InputDecoration(
                       hintText: 'Сообщение...',
                       filled: true,
-                      fillColor: const Color(0xFFF5F5F5),
+                      fillColor: isDark
+                          ? const Color(0xFF2A2A2A)
+                          : const Color(0xFFF5F5F5),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(24),
                         borderSide: BorderSide.none,
