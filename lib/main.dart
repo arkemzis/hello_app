@@ -1455,6 +1455,7 @@ class _ChatPageState extends State<ChatPage> {
   bool _otherOnline = false;
   bool _otherTyping = false;
   Map<int, dynamic> _membersMap = {};
+    dynamic _replyingTo;
   bool _isAdmin = false;
 
   @override
@@ -1726,7 +1727,9 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
     final text = _messageController.text.trim();
     if (text.isEmpty) return;
 
-    _messageController.clear();
+        _messageController.clear();
+    final replySnapshot = _replyingTo;
+    setState(() => _replyingTo = null);
     if (widget.isGroup || widget.isChannel) {
       _socket.emit('typing', {'chatId': widget.chatId, 'typing': false});
     } else {
@@ -1745,9 +1748,19 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
     }
 
     try {
-      final body = (widget.isGroup || widget.isChannel)
-          ? {'chatId': widget.chatId, 'text': text, 'from': widget.myId}
-          : {'to': widget.userId, 'text': sendText, 'from': widget.myId};
+            final body = (widget.isGroup || widget.isChannel)
+          ? {
+              'chatId': widget.chatId,
+              'text': text,
+              'from': widget.myId,
+              if (replySnapshot != null) 'replyToId': replySnapshot['id'],
+            }
+          : {
+              'to': widget.userId,
+              'text': sendText,
+              'from': widget.myId,
+              if (replySnapshot != null) 'replyToId': replySnapshot['id'],
+            };
       final response = await http.post(
         Uri.parse('$serverUrl/send'),
         headers: jsonHeaders,
@@ -1776,7 +1789,12 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
               'sender_name': myName.isNotEmpty ? myName : myEmail,
               'sender_email': myEmail,
               'sender_avatar': myAvatarUrl,
-              'reactions': [],
+                            'reactions': [],
+              if (replySnapshot != null) 'reply_to_id': replySnapshot['id'],
+              if (replySnapshot != null) 'reply_text': replySnapshot['display_text'] ?? replySnapshot['text'] ?? '',
+              if (replySnapshot != null) 'reply_image_url': replySnapshot['image_url'] ?? '',
+              if (replySnapshot != null) 'reply_sender_name': replySnapshot['sender_name'] ?? myName,
+              if (replySnapshot != null) 'reply_sender_email': replySnapshot['sender_email'] ?? myEmail,
             });
           }
         });
@@ -2018,6 +2036,14 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
               ),
              
               const Divider(height: 1),
+                            ListTile(
+                leading: const Icon(Icons.reply, color: Color(0xFF2A5298)),
+                title: const Text('Ответить'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  setState(() => _replyingTo = msg);
+                },
+              ),
               if (isMe)
                 ListTile(
                   leading: const Icon(Icons.edit, color: Color(0xFF2A5298)),
@@ -2294,7 +2320,57 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
                                             ),
                                             child: Column(
                                               crossAxisAlignment: CrossAxisAlignment.end,
-                                              children: [
+                                              children: [                                                if (msg['reply_to_id'] != null)
+                                                  Container(
+                                                    margin: EdgeInsets.fromLTRB(
+                                                      imageUrl.isEmpty ? 0 : 8,
+                                                      0,
+                                                      imageUrl.isEmpty ? 0 : 8,
+                                                      4,
+                                                    ),
+                                                    padding: const EdgeInsets.symmetric(
+                                                      horizontal: 8, vertical: 6),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.black.withOpacity(0.08),
+                                                      borderRadius: BorderRadius.circular(6),
+                                                      border: const Border(
+                                                        left: BorderSide(
+                                                          color: Color(0xFF2A5298), width: 3),
+                                                      ),
+                                                    ),
+                                                    child: Column(
+                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      children: [
+                                                        Text(
+                                                          (msg['reply_sender_name'] as String?)?.isNotEmpty == true
+                                                              ? msg['reply_sender_name']
+                                                              : (msg['reply_sender_email'] as String? ?? ''),
+                                                          style: const TextStyle(
+                                                            color: Color(0xFF2A5298),
+                                                            fontWeight: FontWeight.bold,
+                                                            fontSize: 12,
+                                                          ),
+                                                          maxLines: 1,
+                                                          overflow: TextOverflow.ellipsis,
+                                                        ),
+                                                        const SizedBox(height: 2),
+                                                        Text(
+                                                          (msg['reply_text'] as String?)?.isNotEmpty == true
+                                                              ? msg['reply_text']
+                                                              : ((msg['reply_image_url'] as String?)?.isNotEmpty == true
+                                                                  ? '📷 Фото'
+                                                                  : ''),
+                                                          style: TextStyle(
+                                                            fontSize: 13,
+                                                            color: isMe ? myText : otherText,
+                                                          ),
+                                                          maxLines: 2,
+                                                          overflow: TextOverflow.ellipsis,
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
                                                 if ((widget.isGroup || widget.isChannel) && !isMe && senderName.isNotEmpty)
                                                   Padding(
                                                     padding: EdgeInsets.fromLTRB(
@@ -2423,7 +2499,58 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
             child: canWrite
                 ? Column(
                     mainAxisSize: MainAxisSize.min,
-                    children: [
+                    children: [                      if (_replyingTo != null)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFF0F0F0),
+                            border: const Border(
+                              left: BorderSide(color: Color(0xFF2A5298), width: 3),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      'Ответ на: ${(_replyingTo['sender_name'] as String?) ?? (_replyingTo['sender_email'] as String?) ?? "сообщение"}',
+                                      style: const TextStyle(
+                                        color: Color(0xFF2A5298),
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      _replyingTo['display_text'] != null &&
+                                              (_replyingTo['display_text'] as String).isNotEmpty
+                                          ? _replyingTo['display_text']
+                                          : (_replyingTo['image_url'] != null &&
+                                                  (_replyingTo['image_url'] as String).isNotEmpty
+                                              ? '📷 Фото'
+                                              : ''),
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: isDark ? Colors.white70 : Colors.grey[700],
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.close, size: 18),
+                                onPressed: () => setState(() => _replyingTo = null),
+                                tooltip: 'Отменить ответ',
+                              ),
+                            ],
+                          ),
+                        ),
                       if (_uploading)
                         const Padding(
                           padding: EdgeInsets.only(bottom: 8),
