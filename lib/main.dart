@@ -2293,6 +2293,7 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
                                     ),
                                   GestureDetector(
                                     onLongPress: () => _showMessageMenu(msg),
+                                                                        onDoubleTap: () => _react(msg['id'], '❤️'),
                                     child: Align(
                                       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
                                       child: Column(
