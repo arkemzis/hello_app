@@ -2685,9 +2685,16 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
                                     ),
                                   GestureDetector(
                                     onLongPress: () => _showMessageMenu(msg),
-                                                                                                            onDoubleTap: () {
+                                    onDoubleTap: () {
                                       HapticFeedback.lightImpact();
                                       _react(msg['id'], '❤️');
+                                    },
+                                    onHorizontalDragEnd: (details) {
+                                      if (details.primaryVelocity != null &&
+                                          details.primaryVelocity! > 400) {
+                                        HapticFeedback.mediumImpact();
+                                        setState(() => _replyingTo = msg);
+                                      }
                                     },
                                     child: Align(
                                       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
