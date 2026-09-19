@@ -1074,11 +1074,19 @@ class _UsersPageState extends State<UsersPage> {
 
   void _applyFilter() {
     final q = _searchController.text.trim().toLowerCase();
+    // Скрытые чаты: hidden_at != null И unread_count == 0 → не показывать
+    final visible = _users.where((u) {
+      final hidden = u['hidden_at'];
+      if (hidden == null) return true;
+      final unread = int.tryParse(u['unread_count']?.toString() ?? '0') ?? 0;
+      return unread > 0;
+    }).toList();
+
     setState(() {
       if (q.isEmpty) {
-        _filteredUsers = List.from(_users);
+        _filteredUsers = List.from(visible);
       } else {
-        _filteredUsers = _users.where((u) {
+        _filteredUsers = visible.where((u) {
           final email = (u['email'] as String? ?? '').toLowerCase();
           final name = (u['name'] as String? ?? '').toLowerCase();
           return email.contains(q) || name.contains(q);
@@ -1120,7 +1128,16 @@ class _UsersPageState extends State<UsersPage> {
       final response = await http.get(
         Uri.parse('$serverUrl/my-chats?userId=$myUserId&me=$myUserId'), headers: baseHeaders);
       final data = jsonDecode(response.body);
-      if (data['ok'] == true && mounted) setState(() => _groups = data['chats']);
+      if (data['ok'] == true && mounted) {
+        final allChats = data['chats'] as List;
+        final visibleChats = allChats.where((c) {
+          final hidden = c['hidden_at'];
+          if (hidden == null) return true;
+          final unread = int.tryParse(c['unread_count']?.toString() ?? '0') ?? 0;
+          return unread > 0;
+        }).toList();
+        setState(() => _groups = visibleChats);
+      }
     } catch (e) {}
   }
 
@@ -1183,6 +1200,97 @@ class _UsersPageState extends State<UsersPage> {
         userName: name, userAvatar: (user['avatar_url'] as String?) ?? '',
       ),
     ));
+  }
+  Future<void> _deleteChat({
+    required int? peerId,
+    required int? chatId,
+    required String displayName,
+  }) async {
+    final isGroup = chatId != null;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: isDark ? const Color(0xFF1F1F1F) : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  'Удалить чат «$displayName»?',
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.person_remove, color: Color(0xFF7C3AED)),
+                title: const Text('Удалить у себя'),
+                subtitle: const Text('У собеседника останется'),
+                onTap: () => Navigator.pop(ctx, 'me'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete_forever, color: Colors.red),
+                title: const Text('Удалить у всех', style: TextStyle(color: Colors.red)),
+                subtitle: Text(isGroup
+                    ? 'Удалить для всех участников (только админ)'
+                    : 'Удалить переписку у обоих'),
+                onTap: () => Navigator.pop(ctx, 'all'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.close),
+                title: const Text('Отмена'),
+                onTap: () => Navigator.pop(ctx),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (action == null) return;
+
+    try {
+      if (action == 'me') {
+        final body = (chatId != null)
+            ? {'userId': myUserId, 'chatId': chatId}
+            : {'userId': myUserId, 'peerId': peerId};
+        await http.post(
+          Uri.parse('$serverUrl/hide-chat'),
+          headers: jsonHeaders,
+          body: jsonEncode(body),
+        );
+      } else if (action == 'all') {
+        final body = (chatId != null)
+            ? {'userId': myUserId, 'chatId': chatId}
+            : {'userId': myUserId, 'peerId': peerId};
+        final resp = await http.post(
+          Uri.parse('$serverUrl/delete-chat-for-all'),
+          headers: jsonHeaders,
+          body: jsonEncode(body),
+        );
+        final data = jsonDecode(resp.body);
+        if (data['ok'] != true) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(data['message'] ?? 'Не удалось удалить')),
+          );
+          return;
+        }
+      }
+      await _loadAll(silent: true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка: $e')),
+      );
+    }
   }
 
   void _openCreateGroup() async {
@@ -1390,6 +1498,11 @@ class _UsersPageState extends State<UsersPage> {
                                     ),
                                   )).then((_) => _loadGroups());
                                 },
+                                onLongPress: () => _deleteChat(
+                                  peerId: null,
+                                  chatId: chat['id'],
+                                  displayName: name,
+                                ),
                               );
                             }),
                             const Divider(),
@@ -1464,6 +1577,14 @@ class _UsersPageState extends State<UsersPage> {
                                     ),
                                     
                                 ));
+                              },
+                              onLongPress: () {
+                                if (isMe) return;
+                                _deleteChat(
+                                  peerId: user['id'],
+                                  chatId: null,
+                                  displayName: displayName,
+                                );
                               },
                             );
                           }),
