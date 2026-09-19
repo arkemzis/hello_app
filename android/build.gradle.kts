@@ -19,6 +19,19 @@ subprojects {
     project.evaluationDependsOn(":app")
 }
 
+gradle.projectsEvaluated {
+    subprojects.forEach { sub ->
+        val ext = sub.extensions.findByName("android")
+        if (ext != null) {
+            try {
+                val m = ext.javaClass.getMethod("compileSdkVersion", Int::class.javaPrimitiveType)
+                m.invoke(ext, 36)
+            } catch (e: Exception) {
+            }
+        }
+    }
+}
+
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }

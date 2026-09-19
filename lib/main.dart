@@ -3,6 +3,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:convert';
 import 'dart:io';
@@ -2084,6 +2085,107 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
     }
   }
 
+  Future<void> _pickAndSendFile() async {
+    if (_uploading) return;
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.any,
+        allowMultiple: false,
+      );
+      if (result == null || result.files.isEmpty) return;
+
+      final file = result.files.first;
+      if (file.path == null) return;
+
+      setState(() => _uploading = true);
+
+      final uri = Uri.parse('$serverUrl/upload-file');
+      final request = http.MultipartRequest('POST', uri);
+      request.headers['Host'] = serverHost;
+      request.files.add(await http.MultipartFile.fromPath('file', file.path!));
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+      if (response.statusCode != 200) {
+        if (mounted) setState(() => _uploading = false);
+        return;
+      }
+
+      final data = jsonDecode(response.body);
+      if (data['ok'] != true || data['fileUrl'] == null) {
+        if (mounted) setState(() => _uploading = false);
+        return;
+      }
+
+      final fileUrl = data['fileUrl'];
+      final fileName = data['fileName'] ?? file.name;
+      final fileSize = data['fileSize'] ?? file.size;
+      final fileType = data['fileType'] ?? '';
+
+      final body = (widget.isGroup || widget.isChannel)
+          ? {
+              'chatId': widget.chatId,
+              'text': '',
+              'from': widget.myId,
+              'fileUrl': fileUrl,
+              'fileName': fileName,
+              'fileSize': fileSize,
+              'fileType': fileType,
+            }
+          : {
+              'to': widget.userId,
+              'text': '',
+              'from': widget.myId,
+              'fileUrl': fileUrl,
+              'fileName': fileName,
+              'fileSize': fileSize,
+              'fileType': fileType,
+            };
+
+      final sendResponse = await http.post(
+        Uri.parse('$serverUrl/send'),
+        headers: jsonHeaders,
+        body: jsonEncode(body),
+      );
+      final sendData = jsonDecode(sendResponse.body);
+      if (sendData['ok'] == true) {
+        final newId = sendData['id'];
+        final newCreated = sendData['created_at'];
+        setState(() {
+          if (!_messages.any((m) => m['id'] == newId)) {
+            _messages.add({
+              'id': newId,
+              'from_user': widget.myId,
+              'to_user': (widget.isGroup || widget.isChannel) ? null : widget.userId,
+              'chat_id': (widget.isGroup || widget.isChannel) ? widget.chatId : null,
+              'text': '',
+              'display_text': '',
+              'image_url': '',
+              'file_url': fileUrl,
+              'file_name': fileName,
+              'file_size': fileSize,
+              'file_type': fileType,
+              'created_at': newCreated,
+              'sender_name': myName.isNotEmpty ? myName : myEmail,
+              'sender_email': myEmail,
+              'sender_avatar': myAvatarUrl,
+              'reactions': [],
+            });
+          }
+        });
+        _scrollToBottom();
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
+
+
   Future<void> _pickAndSendImage() async {
     if (_uploading) return;
     try {
@@ -2620,6 +2722,62 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
     );
   }
 
+  void _showAttachMenu() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: isDark ? const Color(0xFF1F1F1F) : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: const Text(
+                  'Прикрепить',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF7C3AED),
+                  ),
+                ),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.image, color: Color(0xFF7C3AED)),
+                title: const Text('Фото'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickAndSendImage();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.attach_file, color: Color(0xFF7C3AED)),
+                title: const Text('Файл'),
+                subtitle: const Text('PDF, документы, архивы, до 25 МБ'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickAndSendFile();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.close),
+                title: const Text('Отмена'),
+                onTap: () => Navigator.pop(ctx),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+
   void _showEmojiPicker() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     showModalBottomSheet(
@@ -2686,6 +2844,50 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
       }
     });
   }
+
+  IconData _fileIcon(String name) {
+    final ext = name.split('.').last.toLowerCase();
+    switch (ext) {
+      case 'pdf':
+        return Icons.picture_as_pdf;
+      case 'doc':
+      case 'docx':
+        return Icons.description;
+      case 'xls':
+      case 'xlsx':
+        return Icons.table_chart;
+      case 'ppt':
+      case 'pptx':
+        return Icons.slideshow;
+      case 'zip':
+      case 'rar':
+      case '7z':
+        return Icons.folder_zip;
+      case 'mp3':
+      case 'wav':
+      case 'm4a':
+        return Icons.audiotrack;
+      case 'mp4':
+      case 'mov':
+      case 'avi':
+        return Icons.video_file;
+      case 'txt':
+        return Icons.text_snippet;
+      case 'apk':
+        return Icons.android;
+      default:
+        return Icons.insert_drive_file;
+    }
+  }
+
+  String _formatFileSize(dynamic sizeRaw) {
+    final size = int.tryParse(sizeRaw?.toString() ?? '0') ?? 0;
+    if (size < 1024) return '$size Б';
+    if (size < 1024 * 1024) return '${(size / 1024).toStringAsFixed(1)} КБ';
+    if (size < 1024 * 1024 * 1024) return '${(size / (1024 * 1024)).toStringAsFixed(1)} МБ';
+    return '${(size / (1024 * 1024 * 1024)).toStringAsFixed(2)} ГБ';
+  }
+
 
   String _formatTime(String? iso) {
     if (iso == null) return '';
@@ -3022,6 +3224,75 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
                                                       },
                                                     ),
                                                   ),
+
+                                                if ((msg['file_url'] as String?)?.isNotEmpty == true)
+                                                  Padding(
+                                                    padding: EdgeInsets.fromLTRB(
+                                                      imageUrl.isEmpty ? 0 : 8,
+                                                      imageUrl.isEmpty ? 0 : 4,
+                                                      imageUrl.isEmpty ? 0 : 8,
+                                                      4,
+                                                    ),
+                                                    child: GestureDetector(
+                                                      onTap: () {
+                                                        final url = '$serverUrl${msg['file_url']}';
+                                                        Clipboard.setData(ClipboardData(text: url));
+                                                        ScaffoldMessenger.of(context).showSnackBar(
+                                                          const SnackBar(
+                                                            content: Text('Ссылка на файл скопирована'),
+                                                            duration: Duration(seconds: 1),
+                                                          ),
+                                                        );
+                                                      },
+                                                      child: Container(
+                                                        padding: const EdgeInsets.all(10),
+                                                        decoration: BoxDecoration(
+                                                          color: Colors.black.withOpacity(0.08),
+                                                          borderRadius: BorderRadius.circular(8),
+                                                        ),
+                                                        child: Row(
+                                                          mainAxisSize: MainAxisSize.min,
+                                                          children: [
+                                                            Icon(
+                                                              _fileIcon((msg['file_name'] as String?) ?? ''),
+                                                              color: const Color(0xFF7C3AED),
+                                                              size: 32,
+                                                            ),
+                                                            const SizedBox(width: 10),
+                                                            Flexible(
+                                                              child: Column(
+                                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                                mainAxisSize: MainAxisSize.min,
+                                                                children: [
+                                                                  Text(
+                                                                    (msg['file_name'] as String?) ?? 'файл',
+                                                                    style: TextStyle(
+                                                                      fontSize: 14,
+                                                                      fontWeight: FontWeight.w600,
+                                                                      color: isMe ? myText : otherText,
+                                                                    ),
+                                                                    maxLines: 1,
+                                                                    overflow: TextOverflow.ellipsis,
+                                                                  ),
+                                                                  const SizedBox(height: 2),
+                                                                  Text(
+                                                                    _formatFileSize((msg['file_size'] ?? 0)),
+                                                                    style: TextStyle(
+                                                                      fontSize: 12,
+                                                                      color: isMe
+                                                                          ? (isDark ? Colors.white70 : Colors.grey[600])
+                                                                          : Colors.grey[600],
+                                                                    ),
+                                                                  ),
+                                                                ],
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+
                                                 if (text.isNotEmpty)
                                                   Padding(
                                                     padding: EdgeInsets.fromLTRB(
@@ -3183,7 +3454,7 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
                         children: [
                           IconButton(
                             icon: const Icon(Icons.attach_file, color: Color(0xFF7C3AED), size: 24),
-                            onPressed: _uploading ? null : _pickAndSendImage,
+                                                        onPressed: _uploading ? null : _showAttachMenu,
                             tooltip: 'Прикрепить фото',
                           ),
                           IconButton(
