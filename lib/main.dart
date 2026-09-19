@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:socket_io_client/socket_io_client.dart' as IO;
@@ -35,13 +36,19 @@ class MyApp extends StatelessWidget {
           title: 'ARKZIS',
           debugShowCheckedModeBanner: false,
           themeMode: mode,
-          theme: ThemeData(
+                    theme: ThemeData(
             colorScheme: ColorScheme.fromSeed(
               seedColor: const Color(0xFF7C3AED),
               brightness: Brightness.light,
             ),
             useMaterial3: true,
             fontFamily: 'Inter',
+            pageTransitionsTheme:  PageTransitionsTheme(
+              builders: {
+                TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+                TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+              },
+            ),
           ),
           darkTheme: ThemeData(
             colorScheme: ColorScheme.fromSeed(
@@ -50,6 +57,12 @@ class MyApp extends StatelessWidget {
             ),
             useMaterial3: true,
             fontFamily: 'Inter',
+            pageTransitionsTheme:  PageTransitionsTheme(
+              builders: {
+                TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+                TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+              },
+            ),
           ),
                     home: const SplashScreen(),
         );
