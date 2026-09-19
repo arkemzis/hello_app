@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:file_picker/file_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:convert';
 import 'dart:io';
@@ -77,6 +78,34 @@ const String serverHost = 'my-messenger-production-063d.up.railway.app';
 const String serverUrl = 'https://$serverIp';
 
 int myUserId = 0;
+Future<void> _saveSession() async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setInt('myUserId', myUserId);
+  await prefs.setString('myEmail', myEmail);
+  await prefs.setString('myName', myName);
+  await prefs.setString('myAvatarUrl', myAvatarUrl);
+}
+
+Future<bool> _loadSession() async {
+  final prefs = await SharedPreferences.getInstance();
+  final uid = prefs.getInt('myUserId');
+  if (uid == null || uid == 0) return false;
+  myUserId = uid;
+  myEmail = prefs.getString('myEmail') ?? '';
+  myName = prefs.getString('myName') ?? '';
+  myAvatarUrl = prefs.getString('myAvatarUrl') ?? '';
+  return true;
+}
+
+Future<void> _clearSession() async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.clear();
+  myUserId = 0;
+  myEmail = '';
+  myName = '';
+  myAvatarUrl = '';
+}
+
 String myEmail = '';
 String myName = '';
 String myAvatarUrl = '';
@@ -683,6 +712,7 @@ class _LoginPageState extends State<LoginPage> {
         myEmail = email;
         myName = '';
         myAvatarUrl = '';
+                await _saveSession();
         if (!mounted) return;
         Navigator.pushReplacement(context,
           MaterialPageRoute(builder: (_) => const NamePage()));
@@ -714,6 +744,7 @@ class _LoginPageState extends State<LoginPage> {
       if (data['ok'] == true) {
         myUserId = data['userId'] ?? 0;
         myEmail = email;
+                await _saveSession();
         if (!mounted) return;
         Navigator.pushReplacement(context,
           MaterialPageRoute(builder: (_) => const UsersPage()));
@@ -896,6 +927,7 @@ class _NamePageState extends State<NamePage> {
         return;
       }
       myName = name;
+            await _saveSession();
       // E2EE: генерируем ключи и отправляем публичный на сервер
       try {
         await E2EE.init();
@@ -922,6 +954,7 @@ class _NamePageState extends State<NamePage> {
         }
       }
 
+      await _saveSession();                                // ← НОВОЕ
       if (!mounted) return;
       Navigator.pushReplacement(context,
         MaterialPageRoute(builder: (_) => const UsersPage()));
@@ -3534,12 +3567,10 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  void _logout() {
-    myUserId = 0;
-    myEmail = '';
-    myName = '';
-    myAvatarUrl = '';
+  Future<void> _logout() async {
+    await _clearSession();
 
+    if (!mounted) return;
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (_) => const LoginPage()),
@@ -3684,11 +3715,15 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    Timer(const Duration(milliseconds: 1500), () {
+    Timer(const Duration(milliseconds: 1500), () async {
+      if (!mounted) return;
+      final hasSession = await _loadSession();
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const LoginPage()),
+        MaterialPageRoute(
+          builder: (_) => hasSession ? const UsersPage() : const LoginPage(),
+        ),
       );
     });
   }
