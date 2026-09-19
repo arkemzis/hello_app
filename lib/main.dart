@@ -1541,11 +1541,30 @@ class _UsersPageState extends State<UsersPage> {
                                 avatarUrl: avatar, displayName: displayName, email: email,
                                 radius: 26, online: online, showOnline: !isMe, showStoryRing: hasStory,
                               ),
-                                                            title: Text(displayName, style: TextStyle(
-                                fontWeight: (int.tryParse(user['unread_count']?.toString() ?? '0') ?? 0) > 0
-                                    ? FontWeight.bold
-                                    : FontWeight.w600,
-                                fontSize: 16)),
+                                                            title: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (online && !isMe)
+                                    Container(
+                                      width: 8,
+                                      height: 8,
+                                      margin: const EdgeInsets.only(right: 6),
+                                      decoration: const BoxDecoration(
+                                        color: Colors.green,
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                  Flexible(
+                                    child: Text(displayName, style: TextStyle(
+                                      fontWeight: (int.tryParse(user['unread_count']?.toString() ?? '0') ?? 0) > 0
+                                          ? FontWeight.bold
+                                          : FontWeight.w600,
+                                      fontSize: 16),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
                               subtitle: Text(
                                 isMe ? 'это вы'
                                   : online ? 'онлайн'
