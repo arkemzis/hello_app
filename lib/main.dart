@@ -1362,7 +1362,7 @@ class _UsersPageState extends State<UsersPage> {
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const _ChatListSkeleton()
           : _error.isNotEmpty
               ? Center(child: Text(_error, style: const TextStyle(color: Colors.red)))
               : Column(
@@ -2817,7 +2817,7 @@ final text = (msg['display_text'] as String?) ?? (msg['text'] as String?) ?? '';
             ),
           Expanded(
             child: _loading
-                ? const Center(child: CircularProgressIndicator())
+                ? const _ChatListSkeleton()
                 : _error.isNotEmpty
                     ? Center(child: Text(_error, style: const TextStyle(color: Colors.red)))
                     : _messages.isEmpty
@@ -3449,6 +3449,95 @@ class _SplashScreenState extends State<SplashScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+// ============= SHIMMER ЗАГРУЗКИ =============
+class _ShimmerBox extends StatefulWidget {
+  final double width;
+  final double height;
+  final double radius;
+  const _ShimmerBox({
+    required this.width,
+    required this.height,
+    this.radius = 8,
+  });
+
+  @override
+  State<_ShimmerBox> createState() => _ShimmerBoxState();
+}
+
+class _ShimmerBoxState extends State<_ShimmerBox>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 1200),
+      vsync: this,
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final base = isDark ? const Color(0xFF1F1F1F) : const Color(0xFFE5E5E5);
+    final highlight = isDark ? const Color(0xFF2E2E2E) : const Color(0xFFF5F5F5);
+
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        return Container(
+          width: widget.width,
+          height: widget.height,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(widget.radius),
+            gradient: LinearGradient(
+              begin: Alignment(-1.0 - 2 * _controller.value, 0),
+              end: Alignment(1.0 - 2 * _controller.value, 0),
+              colors: [base, highlight, base],
+              stops: const [0.0, 0.5, 1.0],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ChatListSkeleton extends StatelessWidget {
+  const _ChatListSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      itemCount: 8,
+      itemBuilder: (context, index) {
+        final isMe = index % 2 == 0;
+        final width = 140.0 + (index * 20) % 100;
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Column(
+            crossAxisAlignment:
+                isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+            children: [
+              _ShimmerBox(width: 80, height: 12, radius: 6),
+              const SizedBox(height: 6),
+              _ShimmerBox(width: width, height: 40, radius: 14),
+            ],
+          ),
+        );
+      },
     );
   }
 }
